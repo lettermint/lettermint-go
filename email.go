@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"runtime"
 	"strings"
 )
 
@@ -203,7 +204,7 @@ func (b *EmailBuilder) Send() (*SendResponse, error) {
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set("x-lettermint-token", b.client.apiToken)
-	req.Header.Set("User-Agent", fmt.Sprintf("lettermint-go/%s", Version))
+	req.Header.Set("User-Agent", fmt.Sprintf("Lettermint/%s (Go; %s)", Version, runtime.Version()))
 
 	if b.idempotencyKey != "" {
 		req.Header.Set("Idempotency-Key", b.idempotencyKey)
