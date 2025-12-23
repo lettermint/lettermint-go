@@ -23,7 +23,7 @@ import (
 	"os"
 	"time"
 
-	"go.lettermint.co/sdk"
+	lettermint "github.com/lettermint/lettermint-go"
 )
 
 func main() {

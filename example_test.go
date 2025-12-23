@@ -6,7 +6,7 @@ import (
 	"log"
 	"net/http"
 
-	"go.lettermint.co/sdk"
+	lettermint "github.com/lettermint/lettermint-go"
 )
 
 func ExampleNew() {

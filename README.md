@@ -1,8 +1,9 @@
 # Lettermint Go SDK
 
-[![Go Reference](https://pkg.go.dev/badge/go.lettermint.co/sdk.svg)](https://pkg.go.dev/go.lettermint.co/sdk)
-[![Go Report Card](https://goreportcard.com/badge/go.lettermint.co/sdk)](https://goreportcard.com/report/go.lettermint.co/sdk)
-[![GitHub Tests Action Status](https://img.shields.io/github/actions/workflow/status/lettermint/lettermint-go/ci.yaml?branch=main&label=tests&style=flat-square)](https://github.com/lettermint/lettermint-go/actions?query=workflow%3ACI+branch%3Amain)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
+[![Build](https://github.com/lettermint/lettermint-go/actions/workflows/ci.yaml/badge.svg)](https://github.com/lettermint/lettermint-go/actions/workflows/ci.yaml)
+[![Release](https://img.shields.io/github/release/lettermint/lettermint-go.svg?style=flat-square)](https://github.com/lettermint/lettermint-go/releases)
+[![Go Reference](https://pkg.go.dev/badge/github.com/lettermint/lettermint-go.svg)](https://pkg.go.dev/github.com/lettermint/lettermint-go)
 
 The official Go SDK for [Lettermint](https://lettermint.co).
 
@@ -13,7 +14,7 @@ The official Go SDK for [Lettermint](https://lettermint.co).
 ## Installation
 
 ```bash
-go get go.lettermint.co/sdk
+go get github.com/lettermint/lettermint-go
 ```
 
 ## Usage
@@ -21,7 +22,7 @@ go get go.lettermint.co/sdk
 ### Initialize the SDK
 
 ```go
-import "go.lettermint.co/sdk"
+import lettermint "github.com/lettermint/lettermint-go"
 
 client, err := lettermint.New("your-api-token")
 if err != nil {
