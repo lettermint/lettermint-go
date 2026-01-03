@@ -4,6 +4,7 @@
 [![Build](https://github.com/lettermint/lettermint-go/actions/workflows/ci.yaml/badge.svg)](https://github.com/lettermint/lettermint-go/actions/workflows/ci.yaml)
 [![Release](https://img.shields.io/github/release/lettermint/lettermint-go.svg?style=flat-square)](https://github.com/lettermint/lettermint-go/releases)
 [![Go Reference](https://pkg.go.dev/badge/github.com/lettermint/lettermint-go.svg)](https://pkg.go.dev/github.com/lettermint/lettermint-go)
+[![Join our Discord server](https://img.shields.io/discord/1305510095588819035?logo=discord&logoColor=eee&label=Discord&labelColor=464ce5&color=0D0E28&cacheSeconds=43200)](https://lettermint.co/r/discord)
 
 The official Go SDK for [Lettermint](https://lettermint.co).
 
