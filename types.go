@@ -1,5 +1,7 @@
 package lettermint
 
+import "time"
+
 // SendResponse represents the response from the send email API.
 type SendResponse struct {
 	// MessageID is the unique identifier for the sent message.
@@ -48,8 +50,8 @@ type WebhookEvent struct {
 	// Event is the event type (e.g., "message.delivered", "message.bounced").
 	Event string `json:"event"`
 
-	// Timestamp is the Unix timestamp when the event occurred.
-	Timestamp int64 `json:"timestamp"`
+	// Timestamp is when the event occurred.
+	Timestamp time.Time `json:"timestamp"`
 
 	// Data contains the event-specific data.
 	Data WebhookEventData `json:"data"`

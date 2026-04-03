@@ -24,7 +24,7 @@ func generateTestSignature(payload string, secret string, timestamp int64) strin
 }
 
 func TestVerifyWebhook_Success(t *testing.T) {
-	payload := `{"id":"wh_123","event":"message.delivered","timestamp":1234567890,"data":{"message_id":"msg_123","recipient":"user@example.com"}}`
+	payload := `{"id":"wh_123","event":"message.delivered","timestamp":"2026-03-23T08:56:21.046734Z","data":{"message_id":"msg_123","recipient":"user@example.com"}}`
 	secret := "test-secret"
 	timestamp := time.Now().Unix()
 	signature := generateTestSignature(payload, secret, timestamp)
