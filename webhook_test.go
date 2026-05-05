@@ -260,6 +260,56 @@ func TestVerifyWebhookFromRequest_Success(t *testing.T) {
 	}
 }
 
+func TestVerifyWebhookFromRequest_AcceptsBodyLargerThanOneMiB(t *testing.T) {
+	payload := fmt.Sprintf(
+		`{"id":"wh_123","event":"message.delivered","data":{"message_id":"%s"}}`,
+		strings.Repeat("a", 1<<20),
+	)
+	secret := "test-secret"
+	timestamp := time.Now().Unix()
+	signature := generateTestSignature(payload, secret, timestamp)
+
+	req := httptest.NewRequest(http.MethodPost, "/webhook", strings.NewReader(payload))
+	req.Header.Set(HeaderSignature, signature)
+	req.Header.Set(HeaderDelivery, fmt.Sprintf("%d", timestamp))
+
+	event, err := VerifyWebhookFromRequest(req, secret, DefaultWebhookTolerance)
+	if err != nil {
+		t.Fatalf("VerifyWebhookFromRequest() error = %v", err)
+	}
+
+	if event.Data.MessageID != strings.Repeat("a", 1<<20) {
+		t.Fatal("VerifyWebhookFromRequest() did not preserve oversized message_id")
+	}
+}
+
+func TestVerifyWebhookFromRequestWithMaxBodyBytes_RejectsBodyLargerThanLimit(t *testing.T) {
+	const maxBodyBytes int64 = 32
+
+	payload := `{"id":"wh_123","event":"message.delivered","data":{"message_id":"msg_123"}}`
+	secret := "test-secret"
+	timestamp := time.Now().Unix()
+	signature := generateTestSignature(payload, secret, timestamp)
+
+	req := httptest.NewRequest(http.MethodPost, "/webhook", strings.NewReader(payload))
+	req.Header.Set(HeaderSignature, signature)
+	req.Header.Set(HeaderDelivery, fmt.Sprintf("%d", timestamp))
+
+	_, err := VerifyWebhookFromRequestWithMaxBodyBytes(req, secret, DefaultWebhookTolerance, maxBodyBytes)
+	if err == nil {
+		t.Fatal("VerifyWebhookFromRequest() expected error for oversized body")
+	}
+
+	var maxBytesErr *http.MaxBytesError
+	if !errors.As(err, &maxBytesErr) {
+		t.Fatalf("VerifyWebhookFromRequest() error should wrap *http.MaxBytesError, got %v", err)
+	}
+
+	if maxBytesErr.Limit != maxBodyBytes {
+		t.Errorf("MaxBytesError.Limit = %v, want %v", maxBytesErr.Limit, maxBodyBytes)
+	}
+}
+
 func TestVerifyWebhookFromRequest_MissingSignatureHeader(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/webhook", strings.NewReader(`{"id":"wh_123"}`))
 	// No signature header

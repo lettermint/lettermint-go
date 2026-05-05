@@ -88,5 +88,9 @@
 //	    }
 //	}
 //
+// VerifyWebhookFromRequest limits request bodies to DefaultWebhookMaxBodyBytes.
+// Use VerifyWebhookFromRequestWithMaxBodyBytes when your application needs to
+// pass a value from environment or config.
+//
 // For more information, visit https://docs.lettermint.co
 package lettermint
