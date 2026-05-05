@@ -139,6 +139,19 @@ func webhookHandler(w http.ResponseWriter, r *http.Request) {
 }
 ```
 
+`VerifyWebhookFromRequest` limits request bodies to `DefaultWebhookMaxBodyBytes`
+(50 MiB). If your application needs a different limit, read it from your own
+configuration or environment and pass it explicitly:
+
+```go
+event, err := lettermint.VerifyWebhookFromRequestWithMaxBodyBytes(
+    r,
+    "your-webhook-secret",
+    lettermint.DefaultWebhookTolerance,
+    50<<20, // 50 MiB
+)
+```
+
 ## API Reference
 
 ### Client Configuration

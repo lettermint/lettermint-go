@@ -19,6 +19,9 @@ const (
 	// Webhooks with timestamps older than this will be rejected.
 	DefaultWebhookTolerance = 5 * time.Minute
 
+	// DefaultWebhookMaxBodyBytes is the maximum request body size accepted by VerifyWebhookFromRequest.
+	DefaultWebhookMaxBodyBytes int64 = 50 << 20
+
 	// HeaderSignature is the webhook signature header name.
 	HeaderSignature = "X-Lettermint-Signature"
 
@@ -94,7 +97,9 @@ func VerifyWebhook(signature string, payload []byte, deliveryTimestamp int64, si
 // VerifyWebhookFromRequest verifies a webhook from an HTTP request.
 //
 // This is a convenience function that extracts the signature and payload
-// from the request and calls VerifyWebhook.
+// from the request and calls VerifyWebhook. The request body is limited to
+// DefaultWebhookMaxBodyBytes. Use VerifyWebhookFromRequestWithMaxBodyBytes
+// to configure a different limit.
 //
 // Note: This function reads and closes the request body.
 //
@@ -109,6 +114,20 @@ func VerifyWebhook(signature string, payload []byte, deliveryTimestamp int64, si
 //	    // Process event...
 //	}
 func VerifyWebhookFromRequest(r *http.Request, signingSecret string, tolerance time.Duration) (*WebhookEvent, error) {
+	return VerifyWebhookFromRequestWithMaxBodyBytes(r, signingSecret, tolerance, DefaultWebhookMaxBodyBytes)
+}
+
+// VerifyWebhookFromRequestWithMaxBodyBytes verifies a webhook from an HTTP request
+// using a caller-provided maximum request body size.
+//
+// This is useful when your application reads the max body size from environment
+// or config. The SDK keeps that configuration explicit instead of reading .env
+// files directly.
+func VerifyWebhookFromRequestWithMaxBodyBytes(r *http.Request, signingSecret string, tolerance time.Duration, maxBodyBytes int64) (*WebhookEvent, error) {
+	if maxBodyBytes <= 0 {
+		return nil, fmt.Errorf("%w: webhook max body bytes must be positive", ErrInvalidRequest)
+	}
+
 	signature := r.Header.Get(HeaderSignature)
 	if signature == "" {
 		return nil, fmt.Errorf("%w: missing %s header", ErrInvalidWebhookSignature, HeaderSignature)
@@ -124,7 +143,10 @@ func VerifyWebhookFromRequest(r *http.Request, signingSecret string, tolerance t
 		}
 	}
 
-	payload, err := io.ReadAll(r.Body)
+	body := http.MaxBytesReader(nil, r.Body, maxBodyBytes)
+	defer body.Close()
+
+	payload, err := io.ReadAll(body)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read request body: %w", err)
 	}
