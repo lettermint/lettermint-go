@@ -189,6 +189,7 @@ func (b *EmailBuilder) Send() (*SendResponse, error) {
 	if err := b.validate(); err != nil {
 		return nil, fmt.Errorf("%w: %v", ErrInvalidRequest, err)
 	}
+	defer b.reset()
 
 	jsonData, err := json.Marshal(b.payload)
 	if err != nil {
@@ -237,6 +238,16 @@ func (b *EmailBuilder) Send() (*SendResponse, error) {
 	}
 
 	return &sendResp, nil
+}
+
+func (b *EmailBuilder) reset() {
+	b.payload = &emailPayload{
+		To:      []string{},
+		CC:      []string{},
+		BCC:     []string{},
+		ReplyTo: []string{},
+	}
+	b.idempotencyKey = ""
 }
 
 // validate checks that all required fields are set.

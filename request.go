@@ -76,7 +76,7 @@ func (c *Client) doRaw(ctx context.Context, method, path string, query map[strin
 	if resp.StatusCode >= 400 {
 		return "", parseAPIError(resp.StatusCode, responseBody)
 	}
-	return strings.TrimSpace(string(responseBody)), nil
+	return string(responseBody), nil
 }
 
 func (c *Client) newRequest(ctx context.Context, method, path string, query map[string]string, body io.Reader) (*http.Request, error) {

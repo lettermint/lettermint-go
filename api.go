@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"net/url"
+	"strings"
 )
 
 type APIClient struct {
@@ -38,11 +39,11 @@ func NewAPI(apiToken string, opts ...Option) (*APIClient, error) {
 }
 
 func (api *APIClient) Ping(ctx context.Context) (string, error) {
-	return api.client.doRaw(ctx, http.MethodGet, "/ping", nil)
+	return rawPing(api.client.doRaw(ctx, http.MethodGet, "/ping", nil))
 }
 
 func (c *Client) Ping(ctx context.Context) (string, error) {
-	return c.doRaw(ctx, http.MethodGet, "/ping", nil)
+	return rawPing(c.doRaw(ctx, http.MethodGet, "/ping", nil))
 }
 
 func (c *Client) SendBatch(ctx context.Context, payload SendBatchMailRequest) (SendBatchEmailResponse, error) {
@@ -326,4 +327,11 @@ func (s *WebhooksService) Delivery(ctx context.Context, webhookID, deliveryID st
 
 func segment(value string) string {
 	return url.PathEscape(value)
+}
+
+func rawPing(value string, err error) (string, error) {
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(value), nil
 }

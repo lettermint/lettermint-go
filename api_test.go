@@ -126,6 +126,62 @@ func TestAPIEndpointPathsAreTyped(t *testing.T) {
 	}
 }
 
+func TestRawMessageEndpointsPreserveResponseBody(t *testing.T) {
+	rawBody := "Subject: Test\r\n\r\nBody with trailing newline\n"
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(rawBody))
+	}))
+	defer server.Close()
+
+	api, err := NewAPI("api-token", WithBaseURL(server.URL))
+	if err != nil {
+		t.Fatalf("NewAPI() error = %v", err)
+	}
+
+	source, err := api.Messages.Source(context.Background(), "msg_123")
+	if err != nil {
+		t.Fatalf("Messages.Source() error = %v", err)
+	}
+	if source != rawBody {
+		t.Fatalf("Messages.Source() = %q, want exact raw body %q", source, rawBody)
+	}
+}
+
+func TestWebhookUpdateSerializesFalseValues(t *testing.T) {
+	enabled := false
+	includeMachineEvents := false
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var payload map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+			t.Fatalf("decode payload: %v", err)
+		}
+
+		if value, ok := payload["enabled"]; !ok || value != false {
+			t.Fatalf("enabled = %#v, present = %v; want false", value, ok)
+		}
+		if value, ok := payload["include_machine_events"]; !ok || value != false {
+			t.Fatalf("include_machine_events = %#v, present = %v; want false", value, ok)
+		}
+
+		_ = json.NewEncoder(w).Encode(map[string]any{"id": "webhook_123"})
+	}))
+	defer server.Close()
+
+	api, err := NewAPI("api-token", WithBaseURL(server.URL))
+	if err != nil {
+		t.Fatalf("NewAPI() error = %v", err)
+	}
+
+	_, err = api.Webhooks.Update(context.Background(), "webhook_123", WebhookUpdateRequest{
+		Enabled:              &enabled,
+		IncludeMachineEvents: &includeMachineEvents,
+	})
+	if err != nil {
+		t.Fatalf("Webhooks.Update() error = %v", err)
+	}
+}
+
 func TestAPICoversTeamOpenAPIOperations(t *testing.T) {
 	specData, err := os.ReadFile("../api-spec/team-openapi.json")
 	if err != nil {

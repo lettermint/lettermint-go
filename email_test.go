@@ -281,6 +281,140 @@ func TestEmailBuilder_Send_WithIdempotencyKey(t *testing.T) {
 	}
 }
 
+func TestEmailBuilder_Send_ResetsPayloadAfterSuccess(t *testing.T) {
+	requests := make([]emailPayload, 0, 2)
+	idempotencyKeys := make([]string, 0, 2)
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var payload emailPayload
+		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+			t.Fatalf("decode payload: %v", err)
+		}
+		requests = append(requests, payload)
+		idempotencyKeys = append(idempotencyKeys, r.Header.Get("Idempotency-Key"))
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_ = json.NewEncoder(w).Encode(SendResponse{MessageID: "msg_123", Status: "queued"})
+	}))
+	defer server.Close()
+
+	client, _ := New("test-token", WithBaseURL(server.URL))
+	builder := client.Email(context.Background())
+
+	if _, err := builder.
+		From("sender@example.com").
+		To("first@example.com").
+		Subject("First").
+		Text("First body").
+		Attach("secret.pdf", "base64secret").
+		MetadataValue("invoice", "123").
+		Header("X-Secret", "keep-out").
+		IdempotencyKey("first-key").
+		Send(); err != nil {
+		t.Fatalf("first Send() error = %v", err)
+	}
+
+	if _, err := builder.
+		From("sender@example.com").
+		To("second@example.com").
+		Subject("Second").
+		Text("Second body").
+		Send(); err != nil {
+		t.Fatalf("second Send() error = %v", err)
+	}
+
+	if len(requests) != 2 {
+		t.Fatalf("requests count = %d, want 2", len(requests))
+	}
+	if got := requests[1].To; len(got) != 1 || got[0] != "second@example.com" {
+		t.Fatalf("second To = %#v, want only second recipient", got)
+	}
+	if len(requests[1].Attachments) != 0 {
+		t.Fatalf("second Attachments = %#v, want none", requests[1].Attachments)
+	}
+	if len(requests[1].Metadata) != 0 {
+		t.Fatalf("second Metadata = %#v, want none", requests[1].Metadata)
+	}
+	if len(requests[1].Headers) != 0 {
+		t.Fatalf("second Headers = %#v, want none", requests[1].Headers)
+	}
+	if idempotencyKeys[1] != "" {
+		t.Fatalf("second Idempotency-Key = %q, want empty", idempotencyKeys[1])
+	}
+}
+
+func TestEmailBuilder_Send_ResetsPayloadAfterAPIError(t *testing.T) {
+	requests := make([]emailPayload, 0, 2)
+	idempotencyKeys := make([]string, 0, 2)
+	count := 0
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		count++
+		var payload emailPayload
+		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+			t.Fatalf("decode payload: %v", err)
+		}
+		requests = append(requests, payload)
+		idempotencyKeys = append(idempotencyKeys, r.Header.Get("Idempotency-Key"))
+
+		w.Header().Set("Content-Type", "application/json")
+		if count == 1 {
+			w.WriteHeader(http.StatusInternalServerError)
+			_, _ = w.Write([]byte(`{"message":"temporary failure"}`))
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+		_ = json.NewEncoder(w).Encode(SendResponse{MessageID: "msg_456", Status: "queued"})
+	}))
+	defer server.Close()
+
+	client, _ := New("test-token", WithBaseURL(server.URL))
+	builder := client.Email(context.Background())
+
+	_, err := builder.
+		From("sender@example.com").
+		To("first@example.com").
+		Subject("First").
+		Text("First body").
+		Attach("secret.pdf", "base64secret").
+		MetadataValue("invoice", "123").
+		Header("X-Secret", "keep-out").
+		IdempotencyKey("first-key").
+		Send()
+	if err == nil {
+		t.Fatal("first Send() expected error, got nil")
+	}
+
+	if _, err := builder.
+		From("sender@example.com").
+		To("second@example.com").
+		Subject("Second").
+		Text("Second body").
+		Send(); err != nil {
+		t.Fatalf("second Send() error = %v", err)
+	}
+
+	if len(requests) != 2 {
+		t.Fatalf("requests count = %d, want 2", len(requests))
+	}
+	if got := requests[1].To; len(got) != 1 || got[0] != "second@example.com" {
+		t.Fatalf("second To = %#v, want only second recipient", got)
+	}
+	if len(requests[1].Attachments) != 0 {
+		t.Fatalf("second Attachments = %#v, want none", requests[1].Attachments)
+	}
+	if len(requests[1].Metadata) != 0 {
+		t.Fatalf("second Metadata = %#v, want none", requests[1].Metadata)
+	}
+	if len(requests[1].Headers) != 0 {
+		t.Fatalf("second Headers = %#v, want none", requests[1].Headers)
+	}
+	if idempotencyKeys[1] != "" {
+		t.Fatalf("second Idempotency-Key = %q, want empty", idempotencyKeys[1])
+	}
+}
+
 func TestEmailBuilder_Send_ValidationError(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")

@@ -332,7 +332,7 @@ type StatsRequestData struct {
 	From           string  `json:"from"`
 	To             string  `json:"to"`
 	ProjectID      *string `json:"project_id,omitempty"`
-	IncludeMachine bool    `json:"include_machine,omitempty"`
+	IncludeMachine *bool   `json:"include_machine,omitempty"`
 }
 
 type StatsTotalsData struct {
@@ -362,7 +362,7 @@ type StoreDomainData struct {
 
 type StoreProjectData struct {
 	Name          string        `json:"name"`
-	SMTPEnabled   bool          `json:"smtp_enabled,omitempty"`
+	SMTPEnabled   *bool         `json:"smtp_enabled,omitempty"`
 	InitialRoutes InitialRoutes `json:"initial_routes,omitempty"`
 }
 
@@ -501,8 +501,8 @@ type UpdateTeamData struct {
 type UpdateWebhookData struct {
 	Name                 string            `json:"name,omitempty"`
 	URL                  string            `json:"url,omitempty"`
-	Enabled              bool              `json:"enabled,omitempty"`
-	IncludeMachineEvents bool              `json:"include_machine_events,omitempty"`
+	Enabled              *bool             `json:"enabled,omitempty"`
+	IncludeMachineEvents *bool             `json:"include_machine_events,omitempty"`
 	Events               []APIWebhookEvent `json:"events,omitempty"`
 }
 
