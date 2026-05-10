@@ -1,0 +1,206 @@
+package lettermint
+
+import (
+	"context"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"os"
+	"reflect"
+	"testing"
+)
+
+func TestNewAPIUsesBearerAuthAndRawPing(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/ping" {
+			t.Fatalf("path = %s, want /ping", r.URL.Path)
+		}
+		if got := r.Header.Get("Authorization"); got != "Bearer api-token" {
+			t.Fatalf("Authorization = %s, want bearer token", got)
+		}
+		if got := r.Header.Get("x-lettermint-token"); got != "" {
+			t.Fatalf("x-lettermint-token = %s, want empty", got)
+		}
+		_, _ = w.Write([]byte("pong\n"))
+	}))
+	defer server.Close()
+
+	api, err := NewAPI("api-token", WithBaseURL(server.URL))
+	if err != nil {
+		t.Fatalf("NewAPI() error = %v", err)
+	}
+
+	pong, err := api.Ping(context.Background())
+	if err != nil {
+		t.Fatalf("Ping() error = %v", err)
+	}
+	if pong != "pong" {
+		t.Fatalf("Ping() = %q, want pong", pong)
+	}
+}
+
+func TestClientPingAndSendBatchUseSendingAuth(t *testing.T) {
+	seenPaths := map[string]bool{}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		seenPaths[r.URL.Path] = true
+		if got := r.Header.Get("x-lettermint-token"); got != "sending-token" {
+			t.Fatalf("x-lettermint-token = %s, want sending token", got)
+		}
+		if got := r.Header.Get("Authorization"); got != "" {
+			t.Fatalf("Authorization = %s, want empty", got)
+		}
+
+		switch r.URL.Path {
+		case "/ping":
+			_, _ = w.Write([]byte("pong"))
+		case "/send/batch":
+			var payload []SendMailRequest
+			if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+				t.Fatalf("decode payload: %v", err)
+			}
+			if len(payload) != 1 || payload[0].From != "from@example.com" {
+				t.Fatalf("unexpected payload: %#v", payload)
+			}
+			_ = json.NewEncoder(w).Encode([]SendResponse{{MessageID: "msg_123", Status: "queued"}})
+		default:
+			t.Fatalf("unexpected path %s", r.URL.Path)
+		}
+	}))
+	defer server.Close()
+
+	client, err := New("sending-token", WithBaseURL(server.URL))
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+
+	pong, err := client.Ping(context.Background())
+	if err != nil {
+		t.Fatalf("Ping() error = %v", err)
+	}
+	if pong != "pong" {
+		t.Fatalf("Ping() = %q, want pong", pong)
+	}
+
+	_, err = client.SendBatch(context.Background(), []SendMailRequest{{
+		From:    "from@example.com",
+		To:      []string{"to@example.com"},
+		Subject: "Hello",
+	}})
+	if err != nil {
+		t.Fatalf("SendBatch() error = %v", err)
+	}
+
+	if !seenPaths["/ping"] || !seenPaths["/send/batch"] {
+		t.Fatalf("missing expected paths: %#v", seenPaths)
+	}
+}
+
+func TestAPIEndpointPathsAreTyped(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if got := r.Header.Get("Authorization"); got != "Bearer api-token" {
+			t.Fatalf("Authorization = %s, want bearer token", got)
+		}
+
+		switch r.URL.EscapedPath() {
+		case "/domains/domain%2Fid", "/messages/msg%2Fid/html", "/routes/route%2Fid/verify-inbound-domain":
+			_ = json.NewEncoder(w).Encode(map[string]any{"id": "ok"})
+		default:
+			t.Fatalf("unexpected path %s", r.URL.EscapedPath())
+		}
+	}))
+	defer server.Close()
+
+	api, err := NewAPI("api-token", WithBaseURL(server.URL))
+	if err != nil {
+		t.Fatalf("NewAPI() error = %v", err)
+	}
+
+	if _, err := api.Domains.Retrieve(context.Background(), "domain/id"); err != nil {
+		t.Fatalf("Domains.Retrieve() error = %v", err)
+	}
+	if _, err := api.Messages.HTML(context.Background(), "msg/id"); err != nil {
+		t.Fatalf("Messages.HTML() error = %v", err)
+	}
+	if _, err := api.Routes.VerifyInboundDomain(context.Background(), "route/id"); err != nil {
+		t.Fatalf("Routes.VerifyInboundDomain() error = %v", err)
+	}
+}
+
+func TestAPICoversTeamOpenAPIOperations(t *testing.T) {
+	specData, err := os.ReadFile("../api-spec/team-openapi.json")
+	if err != nil {
+		t.Fatalf("read spec: %v", err)
+	}
+
+	var spec struct {
+		Paths map[string]map[string]struct {
+			OperationID string `json:"operationId"`
+		} `json:"paths"`
+	}
+	if err := json.Unmarshal(specData, &spec); err != nil {
+		t.Fatalf("parse spec: %v", err)
+	}
+
+	api, err := NewAPI("api-token")
+	if err != nil {
+		t.Fatalf("NewAPI() error = %v", err)
+	}
+
+	methods := map[string]interface{}{
+		"domain.index":                   api.Domains.List,
+		"domain.store":                   api.Domains.Create,
+		"domain.show":                    api.Domains.Retrieve,
+		"domain.destroy":                 api.Domains.Delete,
+		"domain.verifyDnsRecords":        api.Domains.VerifyDNSRecords,
+		"domain.verifySpecificDnsRecord": api.Domains.VerifyDNSRecord,
+		"domain.updateProjects":          api.Domains.UpdateProjects,
+		"v1.ping":                        api.Ping,
+		"message.index":                  api.Messages.List,
+		"message.show":                   api.Messages.Retrieve,
+		"message.events":                 api.Messages.Events,
+		"message.source":                 api.Messages.Source,
+		"message.html":                   api.Messages.HTML,
+		"message.text":                   api.Messages.Text,
+		"project.index":                  api.Projects.List,
+		"project.store":                  api.Projects.Create,
+		"project.show":                   api.Projects.Retrieve,
+		"project.update":                 api.Projects.Update,
+		"project.destroy":                api.Projects.Delete,
+		"project.rotateToken":            api.Projects.RotateToken,
+		"project.updateMembers":          api.Projects.UpdateMembers,
+		"project.addMember":              api.Projects.AddMember,
+		"project.removeMember":           api.Projects.RemoveMember,
+		"route.index":                    api.Projects.Routes,
+		"route.store":                    api.Projects.CreateRoute,
+		"route.show":                     api.Routes.Retrieve,
+		"route.update":                   api.Routes.Update,
+		"route.destroy":                  api.Routes.Delete,
+		"route.verifyInboundDomain":      api.Routes.VerifyInboundDomain,
+		"stats.index":                    api.Stats.Retrieve,
+		"suppression.index":              api.Suppressions.List,
+		"suppression.store":              api.Suppressions.Create,
+		"suppression.destroy":            api.Suppressions.Delete,
+		"team.show":                      api.Team.Retrieve,
+		"team.update":                    api.Team.Update,
+		"team.usage":                     api.Team.Usage,
+		"team.members":                   api.Team.Members,
+		"webhook.index":                  api.Webhooks.List,
+		"webhook.store":                  api.Webhooks.Create,
+		"webhook.show":                   api.Webhooks.Retrieve,
+		"webhook.update":                 api.Webhooks.Update,
+		"webhook.destroy":                api.Webhooks.Delete,
+		"webhook.test":                   api.Webhooks.Test,
+		"webhook.regenerateSecret":       api.Webhooks.RegenerateSecret,
+		"webhook.deliveries":             api.Webhooks.Deliveries,
+		"webhook.showDelivery":           api.Webhooks.Delivery,
+	}
+
+	for _, pathItem := range spec.Paths {
+		for _, operation := range pathItem {
+			method := methods[operation.OperationID]
+			if method == nil || reflect.ValueOf(method).Kind() != reflect.Func {
+				t.Fatalf("missing SDK method for operation %s", operation.OperationID)
+			}
+		}
+	}
+}
