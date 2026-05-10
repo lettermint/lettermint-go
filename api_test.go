@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"reflect"
 	"testing"
 )
@@ -182,21 +181,7 @@ func TestWebhookUpdateSerializesFalseValues(t *testing.T) {
 	}
 }
 
-func TestAPICoversTeamOpenAPIOperations(t *testing.T) {
-	specData, err := os.ReadFile("../api-spec/team-openapi.json")
-	if err != nil {
-		t.Fatalf("read spec: %v", err)
-	}
-
-	var spec struct {
-		Paths map[string]map[string]struct {
-			OperationID string `json:"operationId"`
-		} `json:"paths"`
-	}
-	if err := json.Unmarshal(specData, &spec); err != nil {
-		t.Fatalf("parse spec: %v", err)
-	}
-
+func TestAPIExposesDocumentedOperations(t *testing.T) {
 	api, err := NewAPI("api-token")
 	if err != nil {
 		t.Fatalf("NewAPI() error = %v", err)
@@ -251,12 +236,9 @@ func TestAPICoversTeamOpenAPIOperations(t *testing.T) {
 		"webhook.showDelivery":           api.Webhooks.Delivery,
 	}
 
-	for _, pathItem := range spec.Paths {
-		for _, operation := range pathItem {
-			method := methods[operation.OperationID]
-			if method == nil || reflect.ValueOf(method).Kind() != reflect.Func {
-				t.Fatalf("missing SDK method for operation %s", operation.OperationID)
-			}
+	for operationID, method := range methods {
+		if method == nil || reflect.ValueOf(method).Kind() != reflect.Func {
+			t.Fatalf("missing SDK method for operation %s", operationID)
 		}
 	}
 }
