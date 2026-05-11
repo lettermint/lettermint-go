@@ -25,7 +25,15 @@ type Client struct {
 	apiToken   string
 	baseURL    string
 	httpClient *http.Client
+	authScheme authenticationScheme
 }
+
+type authenticationScheme string
+
+const (
+	authSchemeSending authenticationScheme = "sending"
+	authSchemeBearer  authenticationScheme = "bearer"
+)
 
 // New creates a new Lettermint client with the given API token and options.
 //
@@ -46,13 +54,18 @@ type Client struct {
 //	    lettermint.WithTimeout(60*time.Second),
 //	)
 func New(apiToken string, opts ...Option) (*Client, error) {
+	return newClient(apiToken, authSchemeSending, opts...)
+}
+
+func newClient(apiToken string, authScheme authenticationScheme, opts ...Option) (*Client, error) {
 	if apiToken == "" {
 		return nil, ErrInvalidAPIToken
 	}
 
 	c := &Client{
-		apiToken: apiToken,
-		baseURL:  DefaultBaseURL,
+		apiToken:   apiToken,
+		baseURL:    DefaultBaseURL,
+		authScheme: authScheme,
 		httpClient: &http.Client{
 			Timeout: DefaultTimeout,
 		},
