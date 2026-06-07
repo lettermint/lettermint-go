@@ -20,12 +20,14 @@ go get github.com/lettermint/lettermint-go
 
 ## Usage
 
-### Initialize the SDK
+### Initialize the Sending SDK
+
+Use a project sending token with `lettermint.New(...)`. Sending tokens authenticate with the `x-lettermint-token` header.
 
 ```go
 import lettermint "github.com/lettermint/lettermint-go"
 
-client, err := lettermint.New("your-api-token")
+client, err := lettermint.New("your-sending-token")
 if err != nil {
     log.Fatal(err)
 }
@@ -109,6 +111,71 @@ The idempotency key should be a unique string that you generate for each unique 
 
 For more information, refer to the [documentation](https://docs.lettermint.co/platform/emails/idempotency).
 
+### Batch Sending
+
+```go
+resp, err := client.SendBatch(ctx, []lettermint.SendMailRequest{
+    {
+        From:    "sender@example.com",
+        To:      []string{"recipient@example.com"},
+        Subject: "Hello from Lettermint",
+        Text:    "This is a batch email.",
+    },
+})
+if err != nil {
+    log.Fatal(err)
+}
+
+fmt.Printf("Sent %d emails\n", len(resp))
+```
+
+Both sending and API clients support `Ping`:
+
+```go
+pong, err := client.Ping(ctx)
+if err != nil {
+    log.Fatal(err)
+}
+fmt.Println(pong)
+```
+
+### Team API
+
+Use a team API token with `lettermint.NewAPI(...)`. API tokens authenticate with `Authorization: Bearer ...` and are separate from project sending tokens.
+
+```go
+api, err := lettermint.NewAPI("your-api-token")
+if err != nil {
+    log.Fatal(err)
+}
+
+domains, err := api.Domains.List(ctx, map[string]string{"page[size]": "10"})
+if err != nil {
+    log.Fatal(err)
+}
+fmt.Println(domains)
+
+team, err := api.Team.Retrieve(ctx)
+if err != nil {
+    log.Fatal(err)
+}
+fmt.Println(team)
+
+messageHTML, err := api.Messages.HTML(ctx, "message-id")
+if err != nil {
+    log.Fatal(err)
+}
+fmt.Println(messageHTML)
+
+pong, err := api.Ping(ctx)
+if err != nil {
+    log.Fatal(err)
+}
+fmt.Println(pong)
+```
+
+Endpoint groups are available as `Domains`, `Messages`, `Projects`, `Routes`, `Stats`, `Suppressions`, `Team`, and `Webhooks`.
+
 ### Webhook Verification
 
 Verify webhook signatures to ensure the authenticity of webhook requests:
@@ -157,7 +224,7 @@ event, err := lettermint.VerifyWebhookFromRequestWithMaxBodyBytes(
 ### Client Configuration
 
 ```go
-client, err := lettermint.New("your-api-token",
+client, err := lettermint.New("your-sending-token",
     lettermint.WithBaseURL("https://api.lettermint.co/v1"), // Optional
     lettermint.WithTimeout(30*time.Second),                  // Optional
     lettermint.WithHTTPClient(customHTTPClient),             // Optional
