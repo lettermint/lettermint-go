@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## v2.1.0 - 2026-07-07
+
+### What's Changed
+
+* chore: update README for v2 API by @bjarn in https://github.com/lettermint/lettermint-go/pull/15
+* ci: bump codecov/codecov-action from 6 to 7 by @dependabot[bot] in https://github.com/lettermint/lettermint-go/pull/16
+* ci: bump actions/checkout from 6 to 7 by @dependabot[bot] in https://github.com/lettermint/lettermint-go/pull/17
+* feat: add route settings, webhook auto-reply events, and blocked file types by @bjarn in https://github.com/lettermint/lettermint-go/pull/18
+
+**Full Changelog**: https://github.com/lettermint/lettermint-go/compare/v2.0.0...v2.1.0
+
 ## v2.0.0 - 2026-05-11
 
 ### What's Changed
