@@ -5,36 +5,36 @@ package lettermint
 type MessageStatus string
 
 const (
-	MessageStatusPending        MessageStatus = "pending"
-	MessageStatusQueued         MessageStatus = "queued"
-	MessageStatusSuppressed     MessageStatus = "suppressed"
-	MessageStatusProcessed      MessageStatus = "processed"
-	MessageStatusDelivered      MessageStatus = "delivered"
-	MessageStatusOpened         MessageStatus = "opened"
-	MessageStatusClicked        MessageStatus = "clicked"
-	MessageStatusSoftBounced    MessageStatus = "soft_bounced"
-	MessageStatusHardBounced    MessageStatus = "hard_bounced"
-	MessageStatusSpamComplaint  MessageStatus = "spam_complaint"
-	MessageStatusFailed         MessageStatus = "failed"
-	MessageStatusBlocked        MessageStatus = "blocked"
+	MessageStatusPending MessageStatus = "pending"
+	MessageStatusQueued MessageStatus = "queued"
+	MessageStatusSuppressed MessageStatus = "suppressed"
+	MessageStatusProcessed MessageStatus = "processed"
+	MessageStatusDelivered MessageStatus = "delivered"
+	MessageStatusOpened MessageStatus = "opened"
+	MessageStatusClicked MessageStatus = "clicked"
+	MessageStatusSoftBounced MessageStatus = "soft_bounced"
+	MessageStatusHardBounced MessageStatus = "hard_bounced"
+	MessageStatusSpamComplaint MessageStatus = "spam_complaint"
+	MessageStatusFailed MessageStatus = "failed"
+	MessageStatusBlocked MessageStatus = "blocked"
 	MessageStatusPolicyRejected MessageStatus = "policy_rejected"
-	MessageStatusUnsubscribed   MessageStatus = "unsubscribed"
+	MessageStatusUnsubscribed MessageStatus = "unsubscribed"
 )
 
 type SendMailRequest struct {
-	Route       string                   `json:"route,omitempty"`
-	From        string                   `json:"from"`
-	Subject     string                   `json:"subject"`
-	Tag         *string                  `json:"tag,omitempty"`
-	HTML        *string                  `json:"html,omitempty"`
-	Text        *string                  `json:"text,omitempty"`
-	To          []string                 `json:"to"`
-	Cc          []string                 `json:"cc,omitempty"`
-	Bcc         []string                 `json:"bcc,omitempty"`
-	ReplyTo     []string                 `json:"reply_to,omitempty"`
-	Headers     map[string]string        `json:"headers,omitempty"`
-	Metadata    map[string]string        `json:"metadata,omitempty"`
-	Settings    map[string]interface{}   `json:"settings,omitempty"`
+	Route string `json:"route,omitempty"`
+	From string `json:"from"`
+	Subject string `json:"subject"`
+	Tag *string `json:"tag,omitempty"`
+	HTML *string `json:"html,omitempty"`
+	Text *string `json:"text,omitempty"`
+	To []string `json:"to"`
+	Cc []string `json:"cc,omitempty"`
+	Bcc []string `json:"bcc,omitempty"`
+	ReplyTo []string `json:"reply_to,omitempty"`
+	Headers map[string]string `json:"headers,omitempty"`
+	Metadata map[string]string `json:"metadata,omitempty"`
+	Settings map[string]interface{} `json:"settings,omitempty"`
 	Attachments []map[string]interface{} `json:"attachments,omitempty"`
 }
 
@@ -44,284 +44,286 @@ type AttachmentDelivery string
 
 const (
 	AttachmentDeliveryInline AttachmentDelivery = "inline"
-	AttachmentDeliveryURL    AttachmentDelivery = "url"
+	AttachmentDeliveryURL AttachmentDelivery = "url"
 )
 
 type DnsRecordStatus string
 
 const (
-	DnsRecordStatusActive  DnsRecordStatus = "active"
-	DnsRecordStatusFailed  DnsRecordStatus = "failed"
+	DnsRecordStatusActive DnsRecordStatus = "active"
+	DnsRecordStatusFailed DnsRecordStatus = "failed"
 	DnsRecordStatusPending DnsRecordStatus = "pending"
 )
 
 type DomainData struct {
-	ID              string                   `json:"id"`
-	Domain          string                   `json:"domain"`
-	StatusChangedAt *string                  `json:"status_changed_at"`
-	DNSRecords      []DomainDnsRecordData    `json:"dns_records,omitempty"`
-	Projects        []map[string]interface{} `json:"projects,omitempty"`
-	CreatedAt       string                   `json:"created_at"`
+	ID string `json:"id"`
+	Domain string `json:"domain"`
+	StatusChangedAt *string `json:"status_changed_at"`
+	DNSRecords []DomainDnsRecordData `json:"dns_records,omitempty"`
+	Projects []map[string]interface{} `json:"projects,omitempty"`
+	CreatedAt string `json:"created_at"`
 }
 
 type DomainDnsRecordData struct {
-	ID            string          `json:"id"`
-	Type          RecordType      `json:"type"`
-	Hostname      string          `json:"hostname"`
-	Fqdn          string          `json:"fqdn"`
-	Content       string          `json:"content"`
-	Status        DnsRecordStatus `json:"status"`
-	VerifiedAt    *string         `json:"verified_at"`
-	LastCheckedAt *string         `json:"last_checked_at"`
+	ID string `json:"id"`
+	Type RecordType `json:"type"`
+	Hostname string `json:"hostname"`
+	Fqdn string `json:"fqdn"`
+	Content string `json:"content"`
+	Status DnsRecordStatus `json:"status"`
+	VerifiedAt *string `json:"verified_at"`
+	LastCheckedAt *string `json:"last_checked_at"`
 }
 
 type DomainListData struct {
-	ID              string       `json:"id"`
-	Domain          string       `json:"domain"`
-	Status          DomainStatus `json:"status"`
-	StatusChangedAt *string      `json:"status_changed_at"`
-	CreatedAt       string       `json:"created_at"`
+	ID string `json:"id"`
+	Domain string `json:"domain"`
+	Status DomainStatus `json:"status"`
+	StatusChangedAt *string `json:"status_changed_at"`
+	CreatedAt string `json:"created_at"`
 }
 
 type DomainStatus string
 
 const (
-	DomainStatusVerified            DomainStatus = "verified"
-	DomainStatusPartiallyVerified   DomainStatus = "partially_verified"
+	DomainStatusVerified DomainStatus = "verified"
+	DomainStatusPartiallyVerified DomainStatus = "partially_verified"
 	DomainStatusPendingVerification DomainStatus = "pending_verification"
-	DomainStatusFailedVerification  DomainStatus = "failed_verification"
+	DomainStatusFailedVerification DomainStatus = "failed_verification"
 )
 
 type InitialRoutes string
 
 const (
-	InitialRoutesBoth          InitialRoutes = "both"
+	InitialRoutesBoth InitialRoutes = "both"
 	InitialRoutesTransactional InitialRoutes = "transactional"
-	InitialRoutesBroadcast     InitialRoutes = "broadcast"
+	InitialRoutesBroadcast InitialRoutes = "broadcast"
 )
 
 type MessageAttachmentData struct {
-	Size        int     `json:"size"`
-	Filename    string  `json:"filename"`
-	ContentID   *string `json:"content_id"`
-	ContentType string  `json:"content_type"`
+	Size int `json:"size"`
+	Filename string `json:"filename"`
+	ContentID *string `json:"content_id"`
+	ContentType string `json:"content_type"`
 }
 
 type MessageData struct {
-	ID              string                  `json:"id"`
-	Type            MessageType             `json:"type"`
-	Status          MessageStatus           `json:"status"`
-	StatusChangedAt *string                 `json:"status_changed_at"`
-	Tag             *string                 `json:"tag"`
-	FromEmail       string                  `json:"from_email"`
-	FromName        *string                 `json:"from_name"`
-	ReplyTo         []string                `json:"reply_to"`
-	Subject         *string                 `json:"subject"`
-	To              []MessageRecipientData  `json:"to"`
-	Cc              []MessageRecipientData  `json:"cc"`
-	Bcc             []MessageRecipientData  `json:"bcc"`
-	Attachments     []MessageAttachmentData `json:"attachments"`
-	Metadata        map[string]string       `json:"metadata"`
-	SpamScore       *float64                `json:"spam_score,omitempty"`
-	SpamSymbols     []SpamSymbol            `json:"spam_symbols,omitempty"`
-	RouteID         string                  `json:"route_id"`
-	CreatedAt       string                  `json:"created_at"`
+	ID string `json:"id"`
+	Type MessageType `json:"type"`
+	Status MessageStatus `json:"status"`
+	StatusChangedAt *string `json:"status_changed_at"`
+	Tag *string `json:"tag"`
+	FromEmail string `json:"from_email"`
+	FromName *string `json:"from_name"`
+	ReplyTo []string `json:"reply_to"`
+	Subject *string `json:"subject"`
+	To []MessageRecipientData `json:"to"`
+	Cc []MessageRecipientData `json:"cc"`
+	Bcc []MessageRecipientData `json:"bcc"`
+	Attachments []MessageAttachmentData `json:"attachments"`
+	Metadata map[string]string `json:"metadata"`
+	SpamScore *float64 `json:"spam_score,omitempty"`
+	SpamSymbols []SpamSymbol `json:"spam_symbols,omitempty"`
+	RouteID string `json:"route_id"`
+	CreatedAt string `json:"created_at"`
 }
 
 type MessageEventData struct {
-	MessageID string                 `json:"message_id"`
-	Event     MessageEventType       `json:"event"`
-	Metadata  map[string]interface{} `json:"metadata"`
-	Timestamp string                 `json:"timestamp"`
+	MessageID string `json:"message_id"`
+	Event MessageEventType `json:"event"`
+	Metadata map[string]interface{} `json:"metadata"`
+	Timestamp string `json:"timestamp"`
 }
 
 type MessageEventType string
 
 const (
-	MessageEventTypeQueued             MessageEventType = "queued"
-	MessageEventTypeProcessed          MessageEventType = "processed"
-	MessageEventTypeSuppressed         MessageEventType = "suppressed"
-	MessageEventTypeDelivered          MessageEventType = "delivered"
-	MessageEventTypeSoftBounced        MessageEventType = "soft_bounced"
-	MessageEventTypeHardBounced        MessageEventType = "hard_bounced"
-	MessageEventTypeSpamComplaint      MessageEventType = "spam_complaint"
-	MessageEventTypeFailed             MessageEventType = "failed"
-	MessageEventTypeBlocked            MessageEventType = "blocked"
-	MessageEventTypePolicyRejected     MessageEventType = "policy_rejected"
-	MessageEventTypeUnsubscribed       MessageEventType = "unsubscribed"
-	MessageEventTypeOpened             MessageEventType = "opened"
-	MessageEventTypeClicked            MessageEventType = "clicked"
-	MessageEventTypeInboundReceived    MessageEventType = "inbound_received"
-	MessageEventTypeInboundQueued      MessageEventType = "inbound_queued"
+	MessageEventTypeQueued MessageEventType = "queued"
+	MessageEventTypeProcessed MessageEventType = "processed"
+	MessageEventTypeSuppressed MessageEventType = "suppressed"
+	MessageEventTypeDelivered MessageEventType = "delivered"
+	MessageEventTypeAutoReplied MessageEventType = "auto_replied"
+	MessageEventTypeSoftBounced MessageEventType = "soft_bounced"
+	MessageEventTypeHardBounced MessageEventType = "hard_bounced"
+	MessageEventTypeSpamComplaint MessageEventType = "spam_complaint"
+	MessageEventTypeFailed MessageEventType = "failed"
+	MessageEventTypeBlocked MessageEventType = "blocked"
+	MessageEventTypePolicyRejected MessageEventType = "policy_rejected"
+	MessageEventTypeUnsubscribed MessageEventType = "unsubscribed"
+	MessageEventTypeOpened MessageEventType = "opened"
+	MessageEventTypeClicked MessageEventType = "clicked"
+	MessageEventTypeInboundReceived MessageEventType = "inbound_received"
+	MessageEventTypeInboundQueued MessageEventType = "inbound_queued"
 	MessageEventTypeInboundSpamBlocked MessageEventType = "inbound_spam_blocked"
-	MessageEventTypeInboundProcessed   MessageEventType = "inbound_processed"
-	MessageEventTypeInboundRetry       MessageEventType = "inbound_retry"
+	MessageEventTypeInboundProcessed MessageEventType = "inbound_processed"
+	MessageEventTypeInboundRetry MessageEventType = "inbound_retry"
 )
 
 type MessageListData struct {
-	ID        string                 `json:"id"`
-	Type      MessageType            `json:"type"`
-	Status    MessageStatus          `json:"status"`
-	FromEmail string                 `json:"from_email"`
-	FromName  *string                `json:"from_name"`
-	Subject   *string                `json:"subject"`
-	To        []MessageRecipientData `json:"to"`
-	Cc        []MessageRecipientData `json:"cc"`
-	Bcc       []MessageRecipientData `json:"bcc"`
-	ReplyTo   []string               `json:"reply_to"`
-	Tag       *string                `json:"tag"`
-	CreatedAt string                 `json:"created_at"`
+	ID string `json:"id"`
+	Type MessageType `json:"type"`
+	Status MessageStatus `json:"status"`
+	FromEmail string `json:"from_email"`
+	FromName *string `json:"from_name"`
+	Subject *string `json:"subject"`
+	To []MessageRecipientData `json:"to"`
+	Cc []MessageRecipientData `json:"cc"`
+	Bcc []MessageRecipientData `json:"bcc"`
+	ReplyTo []string `json:"reply_to"`
+	Tag *string `json:"tag"`
+	CreatedAt string `json:"created_at"`
 }
 
 type MessageRecipientData struct {
-	Email string  `json:"email"`
-	Name  *string `json:"name"`
+	Email string `json:"email"`
+	Name *string `json:"name"`
 }
 
 type MessageStatsData struct {
-	MessagesTransactional int     `json:"messages_transactional"`
-	MessagesBroadcast     int     `json:"messages_broadcast"`
-	MessagesInbound       int     `json:"messages_inbound"`
-	Deliverability        float64 `json:"deliverability"`
+	MessagesTransactional int `json:"messages_transactional"`
+	MessagesBroadcast int `json:"messages_broadcast"`
+	MessagesInbound int `json:"messages_inbound"`
+	Deliverability float64 `json:"deliverability"`
 }
 
 type MessageType string
 
 const (
-	MessageTypeInbound  MessageType = "inbound"
+	MessageTypeInbound MessageType = "inbound"
 	MessageTypeOutbound MessageType = "outbound"
 )
 
 type Plan string
 
 const (
-	PlanFree    Plan = "free"
+	PlanFree Plan = "free"
 	PlanStarter Plan = "starter"
-	PlanGrowth  Plan = "growth"
-	PlanPro     Plan = "pro"
+	PlanGrowth Plan = "growth"
+	PlanPro Plan = "pro"
 )
 
 type ProjectData struct {
-	ID               string            `json:"id"`
-	Name             string            `json:"name"`
-	SMTPEnabled      bool              `json:"smtp_enabled"`
-	DefaultRouteID   *string           `json:"default_route_id"`
-	TokenGeneratedAt *string           `json:"token_generated_at"`
-	TokenLastUsedAt  *string           `json:"token_last_used_at"`
-	TokenLastUsedIp  *string           `json:"token_last_used_ip"`
-	Routes           []RouteData       `json:"routes,omitempty"`
-	RoutesCount      int               `json:"routes_count,omitempty"`
-	Domains          []DomainData      `json:"domains,omitempty"`
-	DomainsCount     int               `json:"domains_count,omitempty"`
-	TeamMembers      []TeamMemberData  `json:"team_members,omitempty"`
-	TeamMembersCount int               `json:"team_members_count,omitempty"`
-	Last28Days       *MessageStatsData `json:"last_28_days,omitempty"`
-	CreatedAt        string            `json:"created_at"`
-	UpdatedAt        string            `json:"updated_at"`
+	ID string `json:"id"`
+	Name string `json:"name"`
+	SMTPEnabled bool `json:"smtp_enabled"`
+	RedactEmailContent bool `json:"redact_email_content"`
+	DefaultRouteID *string `json:"default_route_id"`
+	TokenGeneratedAt *string `json:"token_generated_at"`
+	TokenLastUsedAt *string `json:"token_last_used_at"`
+	TokenLastUsedIp *string `json:"token_last_used_ip"`
+	Routes []RouteData `json:"routes,omitempty"`
+	RoutesCount int `json:"routes_count,omitempty"`
+	Domains []DomainData `json:"domains,omitempty"`
+	DomainsCount int `json:"domains_count,omitempty"`
+	TeamMembers []TeamMemberData `json:"team_members,omitempty"`
+	TeamMembersCount int `json:"team_members_count,omitempty"`
+	Last28Days *MessageStatsData `json:"last_28_days,omitempty"`
+	CreatedAt string `json:"created_at"`
+	UpdatedAt string `json:"updated_at"`
 }
 
 type ProjectListData struct {
-	ID               string           `json:"id"`
-	Name             string           `json:"name"`
-	SMTPEnabled      bool             `json:"smtp_enabled"`
-	RoutesCount      int              `json:"routes_count"`
-	DomainsCount     int              `json:"domains_count"`
-	TeamMembersCount int              `json:"team_members_count"`
-	Last28Days       MessageStatsData `json:"last_28_days"`
-	CreatedAt        string           `json:"created_at"`
-	UpdatedAt        string           `json:"updated_at"`
+	ID string `json:"id"`
+	Name string `json:"name"`
+	SMTPEnabled bool `json:"smtp_enabled"`
+	RoutesCount int `json:"routes_count"`
+	DomainsCount int `json:"domains_count"`
+	TeamMembersCount int `json:"team_members_count"`
+	Last28Days MessageStatsData `json:"last_28_days"`
+	CreatedAt string `json:"created_at"`
+	UpdatedAt string `json:"updated_at"`
 }
 
 type RecordType string
 
 const (
-	RecordTypeTXT   RecordType = "TXT"
+	RecordTypeTXT RecordType = "TXT"
 	RecordTypeCNAME RecordType = "CNAME"
-	RecordTypeMX    RecordType = "MX"
+	RecordTypeMX RecordType = "MX"
 )
 
 type RouteData struct {
-	ID                        string             `json:"id"`
-	ProjectID                 string             `json:"project_id"`
-	Slug                      string             `json:"slug"`
-	Name                      string             `json:"name"`
-	RouteType                 RouteType          `json:"route_type"`
-	IsDefault                 bool               `json:"is_default"`
-	InboundAddress            string             `json:"inbound_address,omitempty"`
-	InboundDomain             string             `json:"inbound_domain,omitempty"`
-	InboundDomainVerifiedAt   string             `json:"inbound_domain_verified_at,omitempty"`
-	InboundSpamThreshold      float64            `json:"inbound_spam_threshold,omitempty"`
-	AttachmentDelivery        AttachmentDelivery `json:"attachment_delivery,omitempty"`
-	Project                   ProjectData        `json:"project,omitempty"`
-	WebhooksCount             int                `json:"webhooks_count,omitempty"`
-	SuppressedRecipientsCount int                `json:"suppressed_recipients_count,omitempty"`
-	Statistics                interface{}        `json:"statistics,omitempty"`
-	CreatedAt                 string             `json:"created_at"`
-	UpdatedAt                 string             `json:"updated_at"`
+	ID string `json:"id"`
+	ProjectID string `json:"project_id"`
+	Slug string `json:"slug"`
+	Name string `json:"name"`
+	RouteType RouteType `json:"route_type"`
+	IsDefault bool `json:"is_default"`
+	InboundAddress string `json:"inbound_address,omitempty"`
+	InboundDomain string `json:"inbound_domain,omitempty"`
+	InboundDomainVerifiedAt string `json:"inbound_domain_verified_at,omitempty"`
+	InboundSpamThreshold float64 `json:"inbound_spam_threshold,omitempty"`
+	AttachmentDelivery AttachmentDelivery `json:"attachment_delivery,omitempty"`
+	Project ProjectData `json:"project,omitempty"`
+	WebhooksCount int `json:"webhooks_count,omitempty"`
+	SuppressedRecipientsCount int `json:"suppressed_recipients_count,omitempty"`
+	Statistics interface{} `json:"statistics,omitempty"`
+	CreatedAt string `json:"created_at"`
+	UpdatedAt string `json:"updated_at"`
 }
 
 type RouteListData struct {
-	ID                        string    `json:"id"`
-	Slug                      string    `json:"slug"`
-	Name                      string    `json:"name"`
-	RouteType                 RouteType `json:"route_type"`
-	IsDefault                 bool      `json:"is_default"`
-	WebhooksCount             int       `json:"webhooks_count"`
-	SuppressedRecipientsCount int       `json:"suppressed_recipients_count"`
-	CreatedAt                 string    `json:"created_at"`
-	UpdatedAt                 string    `json:"updated_at"`
+	ID string `json:"id"`
+	Slug string `json:"slug"`
+	Name string `json:"name"`
+	RouteType RouteType `json:"route_type"`
+	IsDefault bool `json:"is_default"`
+	WebhooksCount int `json:"webhooks_count"`
+	SuppressedRecipientsCount int `json:"suppressed_recipients_count"`
+	CreatedAt string `json:"created_at"`
+	UpdatedAt string `json:"updated_at"`
 }
 
 type RouteStatisticData struct {
-	Date                 string `json:"date"`
-	SentCount            int    `json:"sent_count"`
-	DeliveredCount       int    `json:"delivered_count"`
-	OpenedCount          int    `json:"opened_count"`
-	ClickedCount         int    `json:"clicked_count"`
-	HardBounceCount      int    `json:"hard_bounce_count"`
-	SpamComplaintCount   int    `json:"spam_complaint_count"`
-	InboundReceivedCount int    `json:"inbound_received_count"`
-	EffectiveOpenedCount *int   `json:"effective_opened_count"`
-	MachineOpenedCount   *int   `json:"machine_opened_count"`
-	MachineClickedCount  *int   `json:"machine_clicked_count"`
+	Date string `json:"date"`
+	SentCount int `json:"sent_count"`
+	DeliveredCount int `json:"delivered_count"`
+	OpenedCount int `json:"opened_count"`
+	ClickedCount int `json:"clicked_count"`
+	HardBounceCount int `json:"hard_bounce_count"`
+	SpamComplaintCount int `json:"spam_complaint_count"`
+	InboundReceivedCount int `json:"inbound_received_count"`
+	EffectiveOpenedCount *int `json:"effective_opened_count"`
+	MachineOpenedCount *int `json:"machine_opened_count"`
+	MachineClickedCount *int `json:"machine_clicked_count"`
 }
 
 type RouteType string
 
 const (
 	RouteTypeTransactional RouteType = "transactional"
-	RouteTypeBroadcast     RouteType = "broadcast"
-	RouteTypeInbound       RouteType = "inbound"
+	RouteTypeBroadcast RouteType = "broadcast"
+	RouteTypeInbound RouteType = "inbound"
 )
 
 type SpamSymbol struct {
-	Name        string   `json:"name"`
-	Score       float64  `json:"score"`
-	Options     []string `json:"options"`
-	Description *string  `json:"description"`
+	Name string `json:"name"`
+	Score float64 `json:"score"`
+	Options []string `json:"options"`
+	Description *string `json:"description"`
 }
 
 type StatsDailyData struct {
-	Date            string           `json:"date"`
-	Sent            int              `json:"sent"`
-	Delivered       int              `json:"delivered"`
-	HardBounced     int              `json:"hard_bounced"`
-	SpamComplaints  int              `json:"spam_complaints"`
-	Opened          *int             `json:"opened"`
-	Clicked         *int             `json:"clicked"`
-	Inbound         StatsInboundData `json:"inbound"`
-	Transactional   *StatsTypeData   `json:"transactional"`
-	Broadcast       *StatsTypeData   `json:"broadcast"`
-	EffectiveOpened *int             `json:"effective_opened"`
-	MachineOpened   *int             `json:"machine_opened"`
-	MachineClicked  *int             `json:"machine_clicked"`
+	Date string `json:"date"`
+	Sent int `json:"sent"`
+	Delivered int `json:"delivered"`
+	HardBounced int `json:"hard_bounced"`
+	SpamComplaints int `json:"spam_complaints"`
+	Opened *int `json:"opened"`
+	Clicked *int `json:"clicked"`
+	Inbound StatsInboundData `json:"inbound"`
+	Transactional *StatsTypeData `json:"transactional"`
+	Broadcast *StatsTypeData `json:"broadcast"`
+	EffectiveOpened *int `json:"effective_opened"`
+	MachineOpened *int `json:"machine_opened"`
+	MachineClicked *int `json:"machine_clicked"`
 }
 
 type StatsData struct {
-	From   string           `json:"from"`
-	To     string           `json:"to"`
-	Totals StatsTotalsData  `json:"totals"`
-	Daily  []StatsDailyData `json:"daily"`
+	From string `json:"from"`
+	To string `json:"to"`
+	Totals StatsTotalsData `json:"totals"`
+	Daily []StatsDailyData `json:"daily"`
 }
 
 type StatsInboundData struct {
@@ -329,30 +331,30 @@ type StatsInboundData struct {
 }
 
 type StatsRequestData struct {
-	From           string  `json:"from"`
-	To             string  `json:"to"`
-	ProjectID      *string `json:"project_id,omitempty"`
-	IncludeMachine *bool   `json:"include_machine,omitempty"`
+	From string `json:"from"`
+	To string `json:"to"`
+	ProjectID *string `json:"project_id,omitempty"`
+	IncludeMachine *bool `json:"include_machine,omitempty"`
 }
 
 type StatsTotalsData struct {
-	Sent            int              `json:"sent"`
-	Delivered       int              `json:"delivered"`
-	HardBounced     int              `json:"hard_bounced"`
-	SpamComplaints  int              `json:"spam_complaints"`
-	Opened          *int             `json:"opened"`
-	Clicked         *int             `json:"clicked"`
-	Inbound         StatsInboundData `json:"inbound"`
-	Transactional   *StatsTypeData   `json:"transactional"`
-	Broadcast       *StatsTypeData   `json:"broadcast"`
-	EffectiveOpened *int             `json:"effective_opened"`
-	MachineOpened   *int             `json:"machine_opened"`
-	MachineClicked  *int             `json:"machine_clicked"`
+	Sent int `json:"sent"`
+	Delivered int `json:"delivered"`
+	HardBounced int `json:"hard_bounced"`
+	SpamComplaints int `json:"spam_complaints"`
+	Opened *int `json:"opened"`
+	Clicked *int `json:"clicked"`
+	Inbound StatsInboundData `json:"inbound"`
+	Transactional *StatsTypeData `json:"transactional"`
+	Broadcast *StatsTypeData `json:"broadcast"`
+	EffectiveOpened *int `json:"effective_opened"`
+	MachineOpened *int `json:"machine_opened"`
+	MachineClicked *int `json:"machine_clicked"`
 }
 
 type StatsTypeData struct {
-	Sent           int `json:"sent"`
-	HardBounced    int `json:"hard_bounced"`
+	Sent int `json:"sent"`
+	HardBounced int `json:"hard_bounced"`
 	SpamComplaints int `json:"spam_complaints"`
 }
 
@@ -361,98 +363,99 @@ type StoreDomainData struct {
 }
 
 type StoreProjectData struct {
-	Name          string        `json:"name"`
-	SMTPEnabled   *bool         `json:"smtp_enabled,omitempty"`
+	Name string `json:"name"`
+	SMTPEnabled *bool `json:"smtp_enabled,omitempty"`
 	InitialRoutes InitialRoutes `json:"initial_routes,omitempty"`
+	ShortToken *bool `json:"short_token,omitempty"`
 }
 
 type StoreRouteData struct {
-	Name      string    `json:"name"`
+	Name string `json:"name"`
 	RouteType RouteType `json:"route_type"`
-	Slug      *string   `json:"slug,omitempty"`
+	Slug *string `json:"slug,omitempty"`
 }
 
 type StoreSuppressionData struct {
-	Email     *string           `json:"email,omitempty"`
-	Reason    SuppressionReason `json:"reason"`
-	Scope     string            `json:"scope"`
-	RouteID   *string           `json:"route_id,omitempty"`
-	ProjectID *string           `json:"project_id,omitempty"`
-	Emails    []string          `json:"emails,omitempty"`
+	Email *string `json:"email,omitempty"`
+	Reason SuppressionReason `json:"reason"`
+	Scope SuppressionScope `json:"scope"`
+	RouteID *string `json:"route_id,omitempty"`
+	ProjectID *string `json:"project_id,omitempty"`
+	Emails []string `json:"emails,omitempty"`
 }
 
 type StoreWebhookData struct {
-	RouteID              string            `json:"route_id"`
-	Name                 string            `json:"name"`
-	URL                  string            `json:"url"`
-	Enabled              *bool             `json:"enabled,omitempty"`
-	IncludeMachineEvents *bool             `json:"include_machine_events,omitempty"`
-	Events               []APIWebhookEvent `json:"events"`
+	RouteID string `json:"route_id"`
+	Name string `json:"name"`
+	URL string `json:"url"`
+	Enabled *bool `json:"enabled,omitempty"`
+	IncludeMachineEvents *bool `json:"include_machine_events,omitempty"`
+	Events []APIWebhookEvent `json:"events"`
 }
 
 type SuppressedRecipientData struct {
-	ID        string            `json:"id"`
-	Type      SuppressionType   `json:"type"`
-	Value     string            `json:"value"`
-	Reason    SuppressionReason `json:"reason"`
-	Scope     SuppressionScope  `json:"scope"`
-	ProjectID *string           `json:"project_id"`
-	RouteID   *string           `json:"route_id"`
-	CreatedAt string            `json:"created_at"`
-	UpdatedAt string            `json:"updated_at"`
+	ID string `json:"id"`
+	Type SuppressionType `json:"type"`
+	Value string `json:"value"`
+	Reason SuppressionReason `json:"reason"`
+	Scope SuppressionScope `json:"scope"`
+	ProjectID *string `json:"project_id"`
+	RouteID *string `json:"route_id"`
+	CreatedAt string `json:"created_at"`
+	UpdatedAt string `json:"updated_at"`
 }
 
 type SuppressionReason string
 
 const (
 	SuppressionReasonSpamComplaint SuppressionReason = "spam_complaint"
-	SuppressionReasonHardBounce    SuppressionReason = "hard_bounce"
-	SuppressionReasonUnsubscribe   SuppressionReason = "unsubscribe"
-	SuppressionReasonManual        SuppressionReason = "manual"
+	SuppressionReasonHardBounce SuppressionReason = "hard_bounce"
+	SuppressionReasonUnsubscribe SuppressionReason = "unsubscribe"
+	SuppressionReasonManual SuppressionReason = "manual"
 )
 
 type SuppressionScope string
 
 const (
-	SuppressionScopeGlobal  SuppressionScope = "global"
-	SuppressionScopeTeam    SuppressionScope = "team"
+	SuppressionScopeGlobal SuppressionScope = "global"
+	SuppressionScopeTeam SuppressionScope = "team"
 	SuppressionScopeProject SuppressionScope = "project"
-	SuppressionScopeRoute   SuppressionScope = "route"
+	SuppressionScopeRoute SuppressionScope = "route"
 )
 
 type SuppressionType string
 
 const (
-	SuppressionTypeEmail     SuppressionType = "email"
-	SuppressionTypeDomain    SuppressionType = "domain"
+	SuppressionTypeEmail SuppressionType = "email"
+	SuppressionTypeDomain SuppressionType = "domain"
 	SuppressionTypeExtension SuppressionType = "extension"
 )
 
 type TeamAddonData struct {
-	Type      *string `json:"type"`
+	Type *string `json:"type"`
 	ExpiresAt *string `json:"expires_at"`
 }
 
 type TeamData struct {
-	ID            string          `json:"id"`
-	Name          string          `json:"name"`
-	Type          TeamType        `json:"type"`
-	Plan          Plan            `json:"plan"`
-	Tier          VolumeTier      `json:"tier"`
-	VerifiedAt    *string         `json:"verified_at"`
-	Features      []string        `json:"features,omitempty"`
-	Addons        []TeamAddonData `json:"addons,omitempty"`
-	CreatedAt     string          `json:"created_at"`
-	DomainsCount  int             `json:"domains_count,omitempty"`
-	ProjectsCount int             `json:"projects_count,omitempty"`
-	MembersCount  int             `json:"members_count,omitempty"`
+	ID string `json:"id"`
+	Name string `json:"name"`
+	Type TeamType `json:"type"`
+	Plan Plan `json:"plan"`
+	Tier VolumeTier `json:"tier"`
+	VerifiedAt *string `json:"verified_at"`
+	Features []string `json:"features,omitempty"`
+	Addons []TeamAddonData `json:"addons,omitempty"`
+	CreatedAt string `json:"created_at"`
+	DomainsCount int `json:"domains_count,omitempty"`
+	ProjectsCount int `json:"projects_count,omitempty"`
+	MembersCount int `json:"members_count,omitempty"`
 }
 
 type TeamMemberData struct {
-	ID       string   `json:"id"`
-	User     UserData `json:"user,omitempty"`
-	Role     *string  `json:"role"`
-	JoinedAt *string  `json:"joined_at"`
+	ID string `json:"id"`
+	User UserData `json:"user,omitempty"`
+	Role *string `json:"role"`
+	JoinedAt *string `json:"joined_at"`
 }
 
 type TeamType string
@@ -463,15 +466,15 @@ const (
 )
 
 type TeamUsageDetailData struct {
-	CurrentPeriod   TeamUsagePeriodData   `json:"current_period"`
+	CurrentPeriod TeamUsagePeriodData `json:"current_period"`
 	HistoricalUsage []TeamUsagePeriodData `json:"historical_usage"`
 }
 
 type TeamUsagePeriodData struct {
-	Usage             int     `json:"usage"`
+	Usage int `json:"usage"`
 	LastIncrementedAt *string `json:"last_incremented_at"`
-	PeriodStart       string  `json:"period_start"`
-	PeriodEnd         string  `json:"period_end"`
+	PeriodStart string `json:"period_start"`
+	PeriodEnd string `json:"period_end"`
 }
 
 type UpdateDomainProjectsData struct {
@@ -479,8 +482,9 @@ type UpdateDomainProjectsData struct {
 }
 
 type UpdateProjectData struct {
-	Name           *string `json:"name,omitempty"`
-	SMTPEnabled    *bool   `json:"smtp_enabled,omitempty"`
+	Name *string `json:"name,omitempty"`
+	SMTPEnabled *bool `json:"smtp_enabled,omitempty"`
+	RedactEmailContent *bool `json:"redact_email_content,omitempty"`
 	DefaultRouteID *string `json:"default_route_id,omitempty"`
 }
 
@@ -489,9 +493,23 @@ type UpdateProjectMembersData struct {
 }
 
 type UpdateRouteData struct {
-	Name            *string                `json:"name,omitempty"`
-	Settings        map[string]interface{} `json:"settings,omitempty"`
-	InboundSettings map[string]interface{} `json:"inbound_settings,omitempty"`
+	Name *string `json:"name,omitempty"`
+	Settings *UpdateRouteSettingsData `json:"settings,omitempty"`
+	InboundSettings *UpdateRouteInboundSettingsData `json:"inbound_settings,omitempty"`
+}
+
+type UpdateRouteInboundSettingsData struct {
+	InboundDomain *string `json:"inbound_domain,omitempty"`
+	InboundSpamThreshold *float64 `json:"inbound_spam_threshold,omitempty"`
+	AttachmentDelivery *AttachmentDelivery `json:"attachment_delivery,omitempty"`
+}
+
+type UpdateRouteSettingsData struct {
+	TrackOpens *bool `json:"track_opens,omitempty"`
+	TrackClicks *bool `json:"track_clicks,omitempty"`
+	DisablePlaintextGeneration *bool `json:"disable_plaintext_generation,omitempty"`
+	DisableHostedUnsubscribe *bool `json:"disable_hosted_unsubscribe,omitempty"`
+	RedactEmailContent *bool `json:"redact_email_content,omitempty"`
 }
 
 type UpdateTeamData struct {
@@ -499,120 +517,122 @@ type UpdateTeamData struct {
 }
 
 type UpdateWebhookData struct {
-	Name                 string            `json:"name,omitempty"`
-	URL                  string            `json:"url,omitempty"`
-	Enabled              *bool             `json:"enabled,omitempty"`
-	IncludeMachineEvents *bool             `json:"include_machine_events,omitempty"`
-	Events               []APIWebhookEvent `json:"events,omitempty"`
+	Name string `json:"name,omitempty"`
+	URL string `json:"url,omitempty"`
+	Enabled *bool `json:"enabled,omitempty"`
+	IncludeMachineEvents *bool `json:"include_machine_events,omitempty"`
+	Events []APIWebhookEvent `json:"events,omitempty"`
 }
 
 type UserData struct {
-	ID     string  `json:"id"`
-	Name   string  `json:"name"`
-	Email  string  `json:"email"`
+	ID string `json:"id"`
+	Name string `json:"name"`
+	Email string `json:"email"`
 	Avatar *string `json:"avatar"`
 }
 
 type VolumeTier int
 
 const (
-	VolumeTier300     VolumeTier = 300
-	VolumeTier10000   VolumeTier = 10000
-	VolumeTier50000   VolumeTier = 50000
-	VolumeTier125000  VolumeTier = 125000
-	VolumeTier500000  VolumeTier = 500000
-	VolumeTier750000  VolumeTier = 750000
+	VolumeTier300 VolumeTier = 300
+	VolumeTier10000 VolumeTier = 10000
+	VolumeTier50000 VolumeTier = 50000
+	VolumeTier125000 VolumeTier = 125000
+	VolumeTier300000 VolumeTier = 300000
+	VolumeTier500000 VolumeTier = 500000
+	VolumeTier750000 VolumeTier = 750000
 	VolumeTier1000000 VolumeTier = 1000000
 	VolumeTier1500000 VolumeTier = 1500000
 )
 
 type WebhookData struct {
-	ID                   string   `json:"id"`
-	RouteID              string   `json:"route_id"`
-	Name                 string   `json:"name"`
-	URL                  string   `json:"url"`
-	Events               []string `json:"events"`
-	Enabled              bool     `json:"enabled"`
-	IncludeMachineEvents bool     `json:"include_machine_events"`
-	Secret               string   `json:"secret,omitempty"`
-	LastCalledAt         *string  `json:"last_called_at"`
-	CreatedAt            string   `json:"created_at"`
-	UpdatedAt            string   `json:"updated_at"`
+	ID string `json:"id"`
+	RouteID string `json:"route_id"`
+	Name string `json:"name"`
+	URL string `json:"url"`
+	Events []string `json:"events"`
+	Enabled bool `json:"enabled"`
+	IncludeMachineEvents bool `json:"include_machine_events"`
+	Secret string `json:"secret,omitempty"`
+	LastCalledAt *string `json:"last_called_at"`
+	CreatedAt string `json:"created_at"`
+	UpdatedAt string `json:"updated_at"`
 }
 
 type WebhookDeliveryData struct {
-	ID              string                `json:"id"`
-	WebhookID       string                `json:"webhook_id"`
-	EventType       APIWebhookEvent       `json:"event_type"`
-	Status          WebhookDeliveryStatus `json:"status"`
-	AttemptNumber   int                   `json:"attempt_number"`
-	HttpStatusCode  *int                  `json:"http_status_code"`
-	DurationMs      *int                  `json:"duration_ms"`
-	Payload         []string              `json:"payload"`
-	ResponseBody    *string               `json:"response_body"`
-	ResponseHeaders []string              `json:"response_headers"`
-	ErrorMessage    *string               `json:"error_message"`
-	DeliveredAt     *string               `json:"delivered_at"`
-	Timestamp       string                `json:"timestamp"`
+	ID string `json:"id"`
+	WebhookID string `json:"webhook_id"`
+	EventType APIWebhookEvent `json:"event_type"`
+	Status WebhookDeliveryStatus `json:"status"`
+	AttemptNumber int `json:"attempt_number"`
+	HttpStatusCode *int `json:"http_status_code"`
+	DurationMs *int `json:"duration_ms"`
+	Payload []string `json:"payload"`
+	ResponseBody *string `json:"response_body"`
+	ResponseHeaders []string `json:"response_headers"`
+	ErrorMessage *string `json:"error_message"`
+	DeliveredAt *string `json:"delivered_at"`
+	Timestamp string `json:"timestamp"`
 }
 
 type WebhookDeliveryListData struct {
-	ID             string                `json:"id"`
-	WebhookID      string                `json:"webhook_id"`
-	EventType      APIWebhookEvent       `json:"event_type"`
-	Status         WebhookDeliveryStatus `json:"status"`
-	AttemptNumber  int                   `json:"attempt_number"`
-	HttpStatusCode *int                  `json:"http_status_code"`
-	DurationMs     *int                  `json:"duration_ms"`
-	DeliveredAt    *string               `json:"delivered_at"`
-	CreatedAt      string                `json:"created_at"`
+	ID string `json:"id"`
+	WebhookID string `json:"webhook_id"`
+	EventType APIWebhookEvent `json:"event_type"`
+	Status WebhookDeliveryStatus `json:"status"`
+	AttemptNumber int `json:"attempt_number"`
+	HttpStatusCode *int `json:"http_status_code"`
+	DurationMs *int `json:"duration_ms"`
+	DeliveredAt *string `json:"delivered_at"`
+	CreatedAt string `json:"created_at"`
 }
 
 type WebhookDeliveryStatus string
 
 const (
-	WebhookDeliveryStatusPending     WebhookDeliveryStatus = "pending"
-	WebhookDeliveryStatusSuccess     WebhookDeliveryStatus = "success"
-	WebhookDeliveryStatusFailed      WebhookDeliveryStatus = "failed"
+	WebhookDeliveryStatusPending WebhookDeliveryStatus = "pending"
+	WebhookDeliveryStatusSuccess WebhookDeliveryStatus = "success"
+	WebhookDeliveryStatusFailed WebhookDeliveryStatus = "failed"
 	WebhookDeliveryStatusClientError WebhookDeliveryStatus = "client_error"
 	WebhookDeliveryStatusServerError WebhookDeliveryStatus = "server_error"
-	WebhookDeliveryStatusTimeout     WebhookDeliveryStatus = "timeout"
+	WebhookDeliveryStatusTimeout WebhookDeliveryStatus = "timeout"
 )
 
 type APIWebhookEvent string
 
 const (
-	APIWebhookEventMessageCreated        APIWebhookEvent = "message.created"
-	APIWebhookEventMessageSent           APIWebhookEvent = "message.sent"
-	APIWebhookEventMessageDelivered      APIWebhookEvent = "message.delivered"
-	APIWebhookEventMessageHardBounced    APIWebhookEvent = "message.hard_bounced"
-	APIWebhookEventMessageSoftBounced    APIWebhookEvent = "message.soft_bounced"
-	APIWebhookEventMessageSpamComplaint  APIWebhookEvent = "message.spam_complaint"
-	APIWebhookEventMessageFailed         APIWebhookEvent = "message.failed"
-	APIWebhookEventMessageSuppressed     APIWebhookEvent = "message.suppressed"
-	APIWebhookEventMessageUnsubscribed   APIWebhookEvent = "message.unsubscribed"
-	APIWebhookEventMessageOpened         APIWebhookEvent = "message.opened"
-	APIWebhookEventMessageClicked        APIWebhookEvent = "message.clicked"
-	APIWebhookEventMessageInbound        APIWebhookEvent = "message.inbound"
+	APIWebhookEventMessageCreated APIWebhookEvent = "message.created"
+	APIWebhookEventMessageSent APIWebhookEvent = "message.sent"
+	APIWebhookEventMessageDelivered APIWebhookEvent = "message.delivered"
+	APIWebhookEventMessageAutoReplied APIWebhookEvent = "message.auto_replied"
+	APIWebhookEventMessageHardBounced APIWebhookEvent = "message.hard_bounced"
+	APIWebhookEventMessageSoftBounced APIWebhookEvent = "message.soft_bounced"
+	APIWebhookEventMessageSpamComplaint APIWebhookEvent = "message.spam_complaint"
+	APIWebhookEventMessageFailed APIWebhookEvent = "message.failed"
+	APIWebhookEventMessageSuppressed APIWebhookEvent = "message.suppressed"
+	APIWebhookEventMessageUnsubscribed APIWebhookEvent = "message.unsubscribed"
+	APIWebhookEventMessageOpened APIWebhookEvent = "message.opened"
+	APIWebhookEventMessageClicked APIWebhookEvent = "message.clicked"
+	APIWebhookEventMessageInbound APIWebhookEvent = "message.inbound"
 	APIWebhookEventMessagePolicyRejected APIWebhookEvent = "message.policy_rejected"
-	APIWebhookEventWebhookTest           APIWebhookEvent = "webhook.test"
+	APIWebhookEventWebhookTest APIWebhookEvent = "webhook.test"
 )
 
 type WebhookListData struct {
-	ID           string            `json:"id"`
-	RouteID      string            `json:"route_id"`
-	Name         string            `json:"name"`
-	URL          string            `json:"url"`
-	Events       []APIWebhookEvent `json:"events"`
-	Enabled      bool              `json:"enabled"`
-	LastCalledAt *string           `json:"last_called_at"`
-	CreatedAt    string            `json:"created_at"`
-	UpdatedAt    string            `json:"updated_at"`
+	ID string `json:"id"`
+	RouteID string `json:"route_id"`
+	Name string `json:"name"`
+	URL string `json:"url"`
+	Events []APIWebhookEvent `json:"events"`
+	Enabled bool `json:"enabled"`
+	LastCalledAt *string `json:"last_called_at"`
+	CreatedAt string `json:"created_at"`
+	UpdatedAt string `json:"updated_at"`
 }
 
 type SendMailResponse struct {
-	MessageID string        `json:"message_id"`
-	Status    MessageStatus `json:"status"`
+	MessageID string `json:"message_id"`
+	Status MessageStatus `json:"status"`
 }
 
 type SendBatchMailResponse []SendMailResponse
@@ -623,13 +643,13 @@ type SendBatchEmailResponse = SendBatchMailResponse
 type PingResponse int
 
 type DomainIndexResponse struct {
-	Data        []DomainListData `json:"data"`
-	Path        *string          `json:"path"`
-	PerPage     int              `json:"per_page"`
-	NextCursor  *string          `json:"next_cursor"`
-	NextPageURL *string          `json:"next_page_url"`
-	PrevCursor  *string          `json:"prev_cursor"`
-	PrevPageURL *string          `json:"prev_page_url"`
+	Data []DomainListData `json:"data"`
+	Path *string `json:"path"`
+	PerPage int `json:"per_page"`
+	NextCursor *string `json:"next_cursor"`
+	NextPageURL *string `json:"next_page_url"`
+	PrevCursor *string `json:"prev_cursor"`
+	PrevPageURL *string `json:"prev_page_url"`
 }
 
 type DomainStoreRequest StoreDomainData
@@ -653,8 +673,13 @@ type DomainVerifySpecificDNSRecordResponse struct {
 type DomainUpdateProjectsRequest UpdateDomainProjectsData
 
 type DomainUpdateProjectsResponse struct {
-	Data    DomainData `json:"data"`
-	Message string     `json:"message"`
+	Data DomainData `json:"data"`
+	Message string `json:"message"`
+}
+
+type BlockedFileTypesResponse struct {
+	Extensions []string `json:"extensions"`
+	MimeTypes []string `json:"mime_types"`
 }
 
 type MessageIndexResponse interface{}
@@ -662,31 +687,31 @@ type MessageIndexResponse interface{}
 type MessageShowResponse MessageData
 
 type MessageEventsResponse struct {
-	Data        []MessageEventData `json:"data"`
-	Path        *string            `json:"path"`
-	PerPage     int                `json:"per_page"`
-	NextCursor  *string            `json:"next_cursor"`
-	NextPageURL *string            `json:"next_page_url"`
-	PrevCursor  *string            `json:"prev_cursor"`
-	PrevPageURL *string            `json:"prev_page_url"`
+	Data []MessageEventData `json:"data"`
+	Path *string `json:"path"`
+	PerPage int `json:"per_page"`
+	NextCursor *string `json:"next_cursor"`
+	NextPageURL *string `json:"next_page_url"`
+	PrevCursor *string `json:"prev_cursor"`
+	PrevPageURL *string `json:"prev_page_url"`
 }
 
 type ProjectIndexResponse struct {
-	Data        []ProjectListData `json:"data"`
-	Path        *string           `json:"path"`
-	PerPage     int               `json:"per_page"`
-	NextCursor  *string           `json:"next_cursor"`
-	NextPageURL *string           `json:"next_page_url"`
-	PrevCursor  *string           `json:"prev_cursor"`
-	PrevPageURL *string           `json:"prev_page_url"`
+	Data []ProjectListData `json:"data"`
+	Path *string `json:"path"`
+	PerPage int `json:"per_page"`
+	NextCursor *string `json:"next_cursor"`
+	NextPageURL *string `json:"next_page_url"`
+	PrevCursor *string `json:"prev_cursor"`
+	PrevPageURL *string `json:"prev_page_url"`
 }
 
 type ProjectStoreRequest StoreProjectData
 
 type ProjectStoreResponse struct {
-	Data     ProjectData `json:"data"`
-	Message  string      `json:"message"`
-	APIToken string      `json:"api_token"`
+	Data ProjectData `json:"data"`
+	Message string `json:"message"`
+	APIToken string `json:"api_token"`
 }
 
 type ProjectShowResponse ProjectData
@@ -694,8 +719,8 @@ type ProjectShowResponse ProjectData
 type ProjectUpdateRequest UpdateProjectData
 
 type ProjectUpdateResponse struct {
-	Data    ProjectData `json:"data"`
-	Message string      `json:"message"`
+	Data ProjectData `json:"data"`
+	Message string `json:"message"`
 }
 
 type ProjectDestroyResponse struct {
@@ -703,16 +728,16 @@ type ProjectDestroyResponse struct {
 }
 
 type ProjectRotateTokenResponse struct {
-	Data     ProjectData `json:"data"`
-	NewToken string      `json:"new_token"`
-	Message  string      `json:"message"`
+	Data ProjectData `json:"data"`
+	NewToken string `json:"new_token"`
+	Message string `json:"message"`
 }
 
 type ProjectUpdateMembersRequest UpdateProjectMembersData
 
 type ProjectUpdateMembersResponse struct {
-	Data    ProjectData `json:"data"`
-	Message string      `json:"message"`
+	Data ProjectData `json:"data"`
+	Message string `json:"message"`
 }
 
 type ProjectAddMemberResponse struct {
@@ -724,20 +749,20 @@ type ProjectRemoveMemberResponse struct {
 }
 
 type RouteIndexResponse struct {
-	Data        []RouteListData `json:"data"`
-	Path        *string         `json:"path"`
-	PerPage     int             `json:"per_page"`
-	NextCursor  *string         `json:"next_cursor"`
-	NextPageURL *string         `json:"next_page_url"`
-	PrevCursor  *string         `json:"prev_cursor"`
-	PrevPageURL *string         `json:"prev_page_url"`
+	Data []RouteListData `json:"data"`
+	Path *string `json:"path"`
+	PerPage int `json:"per_page"`
+	NextCursor *string `json:"next_cursor"`
+	NextPageURL *string `json:"next_page_url"`
+	PrevCursor *string `json:"prev_cursor"`
+	PrevPageURL *string `json:"prev_page_url"`
 }
 
 type RouteStoreRequest StoreRouteData
 
 type RouteStoreResponse struct {
-	Data    RouteData `json:"data"`
-	Message string    `json:"message"`
+	Data RouteData `json:"data"`
+	Message string `json:"message"`
 }
 
 type RouteShowResponse RouteData
@@ -745,8 +770,8 @@ type RouteShowResponse RouteData
 type RouteUpdateRequest UpdateRouteData
 
 type RouteUpdateResponse struct {
-	Data    RouteData `json:"data"`
-	Message string    `json:"message"`
+	Data RouteData `json:"data"`
+	Message string `json:"message"`
 }
 
 type RouteDestroyResponse struct {
@@ -760,20 +785,20 @@ type RouteVerifyInboundDomainResponse struct {
 type StatsIndexResponse StatsData
 
 type SuppressionIndexResponse struct {
-	Data        []SuppressedRecipientData `json:"data"`
-	Path        *string                   `json:"path"`
-	PerPage     int                       `json:"per_page"`
-	NextCursor  *string                   `json:"next_cursor"`
-	NextPageURL *string                   `json:"next_page_url"`
-	PrevCursor  *string                   `json:"prev_cursor"`
-	PrevPageURL *string                   `json:"prev_page_url"`
+	Data []SuppressedRecipientData `json:"data"`
+	Path *string `json:"path"`
+	PerPage int `json:"per_page"`
+	NextCursor *string `json:"next_cursor"`
+	NextPageURL *string `json:"next_page_url"`
+	PrevCursor *string `json:"prev_cursor"`
+	PrevPageURL *string `json:"prev_page_url"`
 }
 
 type SuppressionStoreRequest StoreSuppressionData
 
 type SuppressionStoreResponse struct {
-	Message interface{}            `json:"message"`
-	Data    map[string]interface{} `json:"data"`
+	Message interface{} `json:"message"`
+	Data map[string]interface{} `json:"data"`
 }
 
 type SuppressionDestroyResponse struct {
@@ -785,37 +810,37 @@ type TeamShowResponse TeamData
 type TeamUpdateRequest UpdateTeamData
 
 type TeamUpdateResponse struct {
-	Data    TeamData `json:"data"`
-	Message string   `json:"message"`
+	Data TeamData `json:"data"`
+	Message string `json:"message"`
 }
 
 type TeamUsageResponse TeamUsageDetailData
 
 type TeamMembersResponse struct {
-	Data        []TeamMemberData `json:"data"`
-	Path        *string          `json:"path"`
-	PerPage     int              `json:"per_page"`
-	NextCursor  *string          `json:"next_cursor"`
-	NextPageURL *string          `json:"next_page_url"`
-	PrevCursor  *string          `json:"prev_cursor"`
-	PrevPageURL *string          `json:"prev_page_url"`
+	Data []TeamMemberData `json:"data"`
+	Path *string `json:"path"`
+	PerPage int `json:"per_page"`
+	NextCursor *string `json:"next_cursor"`
+	NextPageURL *string `json:"next_page_url"`
+	PrevCursor *string `json:"prev_cursor"`
+	PrevPageURL *string `json:"prev_page_url"`
 }
 
 type WebhookIndexResponse struct {
-	Data        []WebhookListData `json:"data"`
-	Path        *string           `json:"path"`
-	PerPage     int               `json:"per_page"`
-	NextCursor  *string           `json:"next_cursor"`
-	NextPageURL *string           `json:"next_page_url"`
-	PrevCursor  *string           `json:"prev_cursor"`
-	PrevPageURL *string           `json:"prev_page_url"`
+	Data []WebhookListData `json:"data"`
+	Path *string `json:"path"`
+	PerPage int `json:"per_page"`
+	NextCursor *string `json:"next_cursor"`
+	NextPageURL *string `json:"next_page_url"`
+	PrevCursor *string `json:"prev_cursor"`
+	PrevPageURL *string `json:"prev_page_url"`
 }
 
 type WebhookStoreRequest StoreWebhookData
 
 type WebhookStoreResponse struct {
-	Data    WebhookData `json:"data"`
-	Message string      `json:"message"`
+	Data WebhookData `json:"data"`
+	Message string `json:"message"`
 }
 
 type WebhookShowResponse WebhookData
@@ -823,8 +848,8 @@ type WebhookShowResponse WebhookData
 type WebhookUpdateRequest UpdateWebhookData
 
 type WebhookUpdateResponse struct {
-	Data    WebhookData `json:"data"`
-	Message string      `json:"message"`
+	Data WebhookData `json:"data"`
+	Message string `json:"message"`
 }
 
 type WebhookDestroyResponse struct {
@@ -832,23 +857,23 @@ type WebhookDestroyResponse struct {
 }
 
 type WebhookTestResponse struct {
-	Message    string `json:"message"`
+	Message string `json:"message"`
 	DeliveryID string `json:"delivery_id"`
 }
 
 type WebhookRegenerateSecretResponse struct {
-	Data    WebhookData `json:"data"`
-	Message string      `json:"message"`
+	Data WebhookData `json:"data"`
+	Message string `json:"message"`
 }
 
 type WebhookDeliveriesResponse struct {
-	Data        []WebhookDeliveryListData `json:"data"`
-	Path        *string                   `json:"path"`
-	PerPage     int                       `json:"per_page"`
-	NextCursor  *string                   `json:"next_cursor"`
-	NextPageURL *string                   `json:"next_page_url"`
-	PrevCursor  *string                   `json:"prev_cursor"`
-	PrevPageURL *string                   `json:"prev_page_url"`
+	Data []WebhookDeliveryListData `json:"data"`
+	Path *string `json:"path"`
+	PerPage int `json:"per_page"`
+	NextCursor *string `json:"next_cursor"`
+	NextPageURL *string `json:"next_page_url"`
+	PrevCursor *string `json:"prev_cursor"`
+	PrevPageURL *string `json:"prev_page_url"`
 }
 
 type WebhookShowDeliveryResponse WebhookDeliveryData

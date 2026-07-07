@@ -42,6 +42,12 @@ func (api *APIClient) Ping(ctx context.Context) (string, error) {
 	return rawPing(api.client.doRaw(ctx, http.MethodGet, "/ping", nil))
 }
 
+func (api *APIClient) BlockedFileTypes(ctx context.Context) (BlockedFileTypesResponse, error) {
+	var out BlockedFileTypesResponse
+	err := api.client.doJSON(ctx, http.MethodGet, "/blocked-file-types", nil, nil, &out)
+	return out, err
+}
+
 func (c *Client) Ping(ctx context.Context) (string, error) {
 	return rawPing(c.doRaw(ctx, http.MethodGet, "/ping", nil))
 }
