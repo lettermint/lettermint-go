@@ -38,6 +38,39 @@ func TestNewAPIUsesBearerAuthAndRawPing(t *testing.T) {
 	}
 }
 
+func TestAPIBlockedFileTypesUsesBearerAuth(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/blocked-file-types" {
+			t.Fatalf("path = %s, want /blocked-file-types", r.URL.Path)
+		}
+		if got := r.Header.Get("Authorization"); got != "Bearer api-token" {
+			t.Fatalf("Authorization = %s, want bearer token", got)
+		}
+		if got := r.Header.Get("x-lettermint-token"); got != "" {
+			t.Fatalf("x-lettermint-token = %s, want empty", got)
+		}
+
+		_ = json.NewEncoder(w).Encode(BlockedFileTypesResponse{
+			Extensions: []string{"exe"},
+			MimeTypes:  []string{"application/x-msdownload"},
+		})
+	}))
+	defer server.Close()
+
+	api, err := NewAPI("api-token", WithBaseURL(server.URL))
+	if err != nil {
+		t.Fatalf("NewAPI() error = %v", err)
+	}
+
+	response, err := api.BlockedFileTypes(context.Background())
+	if err != nil {
+		t.Fatalf("BlockedFileTypes() error = %v", err)
+	}
+	if len(response.Extensions) != 1 || response.Extensions[0] != "exe" {
+		t.Fatalf("BlockedFileTypes().Extensions = %#v", response.Extensions)
+	}
+}
+
 func TestClientPingAndSendBatchUseSendingAuth(t *testing.T) {
 	seenPaths := map[string]bool{}
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -181,6 +214,47 @@ func TestWebhookUpdateSerializesFalseValues(t *testing.T) {
 	}
 }
 
+func TestAPITypesMatchCurrentTeamSchema(t *testing.T) {
+	if MessageEventTypeAutoReplied != MessageEventType("auto_replied") {
+		t.Fatalf("MessageEventTypeAutoReplied = %q", MessageEventTypeAutoReplied)
+	}
+	if APIWebhookEventMessageAutoReplied != APIWebhookEvent("message.auto_replied") {
+		t.Fatalf("APIWebhookEventMessageAutoReplied = %q", APIWebhookEventMessageAutoReplied)
+	}
+	if VolumeTier300000 != VolumeTier(300000) {
+		t.Fatalf("VolumeTier300000 = %d", VolumeTier300000)
+	}
+
+	redact := false
+	routeUpdate := UpdateRouteData{
+		Settings: &UpdateRouteSettingsData{
+			RedactEmailContent:         &redact,
+			DisablePlaintextGeneration: &redact,
+		},
+		InboundSettings: &UpdateRouteInboundSettingsData{
+			InboundSpamThreshold: floatPtr(3),
+		},
+	}
+	projectUpdate := UpdateProjectData{RedactEmailContent: &redact}
+	project := ProjectData{RedactEmailContent: true}
+	projectCreate := StoreProjectData{Name: "Production", ShortToken: &redact}
+	suppression := StoreSuppressionData{Reason: SuppressionReasonManual, Scope: SuppressionScopeGlobal}
+	blockedFileTypes := BlockedFileTypesResponse{
+		Extensions: []string{"exe"},
+		MimeTypes:  []string{"application/x-msdownload"},
+	}
+
+	if routeUpdate.Settings.RedactEmailContent == nil ||
+		routeUpdate.InboundSettings.InboundSpamThreshold == nil ||
+		projectUpdate.RedactEmailContent == nil ||
+		projectCreate.ShortToken == nil ||
+		!project.RedactEmailContent ||
+		suppression.Scope != SuppressionScopeGlobal ||
+		blockedFileTypes.MimeTypes[0] != "application/x-msdownload" {
+		t.Fatalf("generated API types do not expose current Team schema additions")
+	}
+}
+
 func TestAPIExposesDocumentedOperations(t *testing.T) {
 	api, err := NewAPI("api-token")
 	if err != nil {
@@ -196,6 +270,7 @@ func TestAPIExposesDocumentedOperations(t *testing.T) {
 		"domain.verifySpecificDnsRecord": api.Domains.VerifyDNSRecord,
 		"domain.updateProjects":          api.Domains.UpdateProjects,
 		"v1.ping":                        api.Ping,
+		"v1.blockedFileTypes":            api.BlockedFileTypes,
 		"message.index":                  api.Messages.List,
 		"message.show":                   api.Messages.Retrieve,
 		"message.events":                 api.Messages.Events,
@@ -241,4 +316,8 @@ func TestAPIExposesDocumentedOperations(t *testing.T) {
 			t.Fatalf("missing SDK method for operation %s", operationID)
 		}
 	}
+}
+
+func floatPtr(value float64) *float64 {
+	return &value
 }
