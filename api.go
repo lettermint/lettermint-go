@@ -175,24 +175,6 @@ func (s *ProjectsService) RotateToken(ctx context.Context, projectID string) (Pr
 	return out, err
 }
 
-func (s *ProjectsService) UpdateMembers(ctx context.Context, projectID string, payload ProjectUpdateMembersRequest) (ProjectUpdateMembersResponse, error) {
-	var out ProjectUpdateMembersResponse
-	err := s.client.doJSON(ctx, http.MethodPut, "/projects/"+segment(projectID)+"/members", nil, payload, &out)
-	return out, err
-}
-
-func (s *ProjectsService) AddMember(ctx context.Context, projectID, teamMemberID string) (ProjectAddMemberResponse, error) {
-	var out ProjectAddMemberResponse
-	err := s.client.doJSON(ctx, http.MethodPost, "/projects/"+segment(projectID)+"/members/"+segment(teamMemberID), nil, nil, &out)
-	return out, err
-}
-
-func (s *ProjectsService) RemoveMember(ctx context.Context, projectID, teamMemberID string) (ProjectRemoveMemberResponse, error) {
-	var out ProjectRemoveMemberResponse
-	err := s.client.doJSON(ctx, http.MethodDelete, "/projects/"+segment(projectID)+"/members/"+segment(teamMemberID), nil, nil, &out)
-	return out, err
-}
-
 func (s *ProjectsService) Routes(ctx context.Context, projectID string, query map[string]string) (RouteIndexResponse, error) {
 	var out RouteIndexResponse
 	err := s.client.doJSON(ctx, http.MethodGet, "/projects/"+segment(projectID)+"/routes", query, nil, &out)
@@ -271,9 +253,27 @@ func (s *TeamService) Usage(ctx context.Context) (TeamUsageResponse, error) {
 	return out, err
 }
 
+func (s *TeamService) Roles(ctx context.Context) (TeamRolesResponse, error) {
+	var out TeamRolesResponse
+	err := s.client.doJSON(ctx, http.MethodGet, "/team/roles", nil, nil, &out)
+	return out, err
+}
+
 func (s *TeamService) Members(ctx context.Context, query map[string]string) (TeamMembersResponse, error) {
 	var out TeamMembersResponse
 	err := s.client.doJSON(ctx, http.MethodGet, "/team/members", query, nil, &out)
+	return out, err
+}
+
+func (s *TeamService) Member(ctx context.Context, userID string) (TeamMembersShowResponse, error) {
+	var out TeamMembersShowResponse
+	err := s.client.doJSON(ctx, http.MethodGet, "/team/members/"+segment(userID), nil, nil, &out)
+	return out, err
+}
+
+func (s *TeamService) UpdateMemberAssignment(ctx context.Context, userID string, payload TeamMembersAssignmentUpdateRequest) (TeamMembersAssignmentUpdateResponse, error) {
+	var out TeamMembersAssignmentUpdateResponse
+	err := s.client.doJSON(ctx, http.MethodPut, "/team/members/"+segment(userID)+"/assignment", nil, payload, &out)
 	return out, err
 }
 
