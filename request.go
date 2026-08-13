@@ -13,14 +13,20 @@ import (
 )
 
 func (c *Client) doJSON(ctx context.Context, method, path string, query map[string]string, payload interface{}, out interface{}) error {
+	return c.doJSONWithHeaders(ctx, method, path, query, payload, nil, out)
+}
+
+func (c *Client) doJSONWithHeaders(ctx context.Context, method, path string, query map[string]string, payload interface{}, headers map[string]string, out interface{}) error {
 	body, err := requestBody(payload)
 	if err != nil {
 		return err
 	}
-
 	req, err := c.newRequest(ctx, method, path, query, body)
 	if err != nil {
 		return err
+	}
+	for key, value := range headers {
+		req.Header.Set(key, value)
 	}
 
 	resp, err := c.httpClient.Do(req)

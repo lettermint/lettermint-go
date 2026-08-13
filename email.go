@@ -112,7 +112,7 @@ func (b *EmailBuilder) Headers(headers map[string]string) *EmailBuilder {
 //
 // The content must be base64-encoded.
 func (b *EmailBuilder) Attach(filename, content string) *EmailBuilder {
-	return b.AttachWithContentID(filename, content, "")
+	return b.AttachWithOptions(filename, content, AttachmentOptions{})
 }
 
 // AttachWithContentID adds a file attachment with a Content-ID for inline embedding.
@@ -120,11 +120,28 @@ func (b *EmailBuilder) Attach(filename, content string) *EmailBuilder {
 // Use this for embedding images in HTML emails via cid: references.
 // Example: <img src="cid:logo"> with contentID "logo".
 func (b *EmailBuilder) AttachWithContentID(filename, content, contentID string) *EmailBuilder {
+	return b.AttachWithOptions(filename, content, AttachmentOptions{ContentID: contentID})
+}
+
+// AttachWithContentType adds a file attachment with an explicit MIME type.
+func (b *EmailBuilder) AttachWithContentType(filename, content, contentType string) *EmailBuilder {
+	return b.AttachWithOptions(filename, content, AttachmentOptions{ContentType: contentType})
+}
+
+// AttachWithOptions adds a file attachment with optional Content-ID and MIME type values.
+func (b *EmailBuilder) AttachWithOptions(filename, content string, options AttachmentOptions) *EmailBuilder {
 	b.payload.Attachments = append(b.payload.Attachments, Attachment{
-		Filename:  filename,
-		Content:   content,
-		ContentID: contentID,
+		Filename:    filename,
+		Content:     content,
+		ContentID:   options.ContentID,
+		ContentType: options.ContentType,
 	})
+	return b
+}
+
+// Settings sets per-email route overrides.
+func (b *EmailBuilder) Settings(settings EmailSettings) *EmailBuilder {
+	b.payload.Settings = &settings
 	return b
 }
 

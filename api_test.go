@@ -86,6 +86,9 @@ func TestClientPingAndSendBatchUseSendingAuth(t *testing.T) {
 		case "/ping":
 			_, _ = w.Write([]byte("pong"))
 		case "/send/batch":
+			if got := r.Header.Get("Idempotency-Key"); got != "batch-key" {
+				t.Fatalf("Idempotency-Key = %q, want batch-key", got)
+			}
 			var payload []SendMailRequest
 			if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
 				t.Fatalf("decode payload: %v", err)
@@ -113,11 +116,11 @@ func TestClientPingAndSendBatchUseSendingAuth(t *testing.T) {
 		t.Fatalf("Ping() = %q, want pong", pong)
 	}
 
-	_, err = client.SendBatch(context.Background(), []SendMailRequest{{
+	_, err = client.SendBatchWithIdempotencyKey(context.Background(), []SendMailRequest{{
 		From:    "from@example.com",
 		To:      []string{"to@example.com"},
 		Subject: "Hello",
-	}})
+	}}, "batch-key")
 	if err != nil {
 		t.Fatalf("SendBatch() error = %v", err)
 	}

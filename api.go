@@ -53,8 +53,16 @@ func (c *Client) Ping(ctx context.Context) (string, error) {
 }
 
 func (c *Client) SendBatch(ctx context.Context, payload SendBatchMailRequest) (SendBatchEmailResponse, error) {
+	return c.SendBatchWithIdempotencyKey(ctx, payload, "")
+}
+
+func (c *Client) SendBatchWithIdempotencyKey(ctx context.Context, payload SendBatchMailRequest, key string) (SendBatchEmailResponse, error) {
 	var out SendBatchEmailResponse
-	err := c.doJSON(ctx, http.MethodPost, "/send/batch", nil, payload, &out)
+	var headers map[string]string
+	if key != "" {
+		headers = map[string]string{"Idempotency-Key": key}
+	}
+	err := c.doJSONWithHeaders(ctx, http.MethodPost, "/send/batch", nil, payload, headers, &out)
 	return out, err
 }
 
