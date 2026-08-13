@@ -86,6 +86,9 @@ func TestClientPingAndSendBatchUseSendingAuth(t *testing.T) {
 		case "/ping":
 			_, _ = w.Write([]byte("pong"))
 		case "/send/batch":
+			if got := r.Header.Get("Idempotency-Key"); got != "batch-key" {
+				t.Fatalf("Idempotency-Key = %q, want batch-key", got)
+			}
 			var payload []SendMailRequest
 			if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
 				t.Fatalf("decode payload: %v", err)
@@ -113,11 +116,11 @@ func TestClientPingAndSendBatchUseSendingAuth(t *testing.T) {
 		t.Fatalf("Ping() = %q, want pong", pong)
 	}
 
-	_, err = client.SendBatch(context.Background(), []SendMailRequest{{
+	_, err = client.SendBatchWithIdempotencyKey(context.Background(), []SendMailRequest{{
 		From:    "from@example.com",
 		To:      []string{"to@example.com"},
 		Subject: "Hello",
-	}})
+	}}, "batch-key")
 	if err != nil {
 		t.Fatalf("SendBatch() error = %v", err)
 	}
@@ -136,6 +139,28 @@ func TestAPIEndpointPathsAreTyped(t *testing.T) {
 		switch r.URL.EscapedPath() {
 		case "/domains/domain%2Fid", "/messages/msg%2Fid/html", "/routes/route%2Fid/verify-inbound-domain":
 			_ = json.NewEncoder(w).Encode(map[string]any{"id": "ok"})
+		case "/team/roles":
+			if r.Method != http.MethodGet {
+				t.Fatalf("team roles method = %s", r.Method)
+			}
+			_ = json.NewEncoder(w).Encode(map[string]any{"data": []any{}})
+		case "/team/members/user%2Fid":
+			if r.Method != http.MethodGet {
+				t.Fatalf("team member method = %s", r.Method)
+			}
+			_ = json.NewEncoder(w).Encode(map[string]any{"id": "user/id"})
+		case "/team/members/user%2Fid/assignment":
+			if r.Method != http.MethodPut {
+				t.Fatalf("team member assignment method = %s", r.Method)
+			}
+			var payload map[string]any
+			if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+				t.Fatalf("decode assignment payload: %v", err)
+			}
+			if payload["role_id"] != "role_123" {
+				t.Fatalf("role_id = %#v", payload["role_id"])
+			}
+			_ = json.NewEncoder(w).Encode(map[string]any{"id": "user/id"})
 		default:
 			t.Fatalf("unexpected path %s", r.URL.EscapedPath())
 		}
@@ -155,6 +180,18 @@ func TestAPIEndpointPathsAreTyped(t *testing.T) {
 	}
 	if _, err := api.Routes.VerifyInboundDomain(context.Background(), "route/id"); err != nil {
 		t.Fatalf("Routes.VerifyInboundDomain() error = %v", err)
+	}
+	if _, err := api.Team.Roles(context.Background()); err != nil {
+		t.Fatalf("Team.Roles() error = %v", err)
+	}
+	if _, err := api.Team.Member(context.Background(), "user/id"); err != nil {
+		t.Fatalf("Team.Member() error = %v", err)
+	}
+	if _, err := api.Team.UpdateMemberAssignment(context.Background(), "user/id", TeamMembersAssignmentUpdateRequest{
+		RoleID:        "role_123",
+		ProjectAccess: map[string]interface{}{"scope": "all"},
+	}); err != nil {
+		t.Fatalf("Team.UpdateMemberAssignment() error = %v", err)
 	}
 }
 
@@ -221,15 +258,19 @@ func TestAPITypesMatchCurrentTeamSchema(t *testing.T) {
 	if APIWebhookEventMessageAutoReplied != APIWebhookEvent("message.auto_replied") {
 		t.Fatalf("APIWebhookEventMessageAutoReplied = %q", APIWebhookEventMessageAutoReplied)
 	}
-	if VolumeTier300000 != VolumeTier(300000) {
-		t.Fatalf("VolumeTier300000 = %d", VolumeTier300000)
+	if BuiltInTeamRoleAdmin != BuiltInTeamRole("admin") {
+		t.Fatalf("BuiltInTeamRoleAdmin = %q", BuiltInTeamRoleAdmin)
+	}
+	if TlsPolicyEnforced != TlsPolicy("enforced") {
+		t.Fatalf("TlsPolicyEnforced = %q", TlsPolicyEnforced)
 	}
 
 	redact := false
 	routeUpdate := UpdateRouteData{
 		Settings: &UpdateRouteSettingsData{
-			RedactEmailContent:         &redact,
-			DisablePlaintextGeneration: &redact,
+			RedactEmailContent:        &redact,
+			GeneratePlaintextFallback: &redact,
+			Tls:                       tlsPolicyPtr(TlsPolicyEnforced),
 		},
 		InboundSettings: &UpdateRouteInboundSettingsData{
 			InboundSpamThreshold: floatPtr(3),
@@ -243,6 +284,15 @@ func TestAPITypesMatchCurrentTeamSchema(t *testing.T) {
 		Extensions: []string{"exe"},
 		MimeTypes:  []string{"application/x-msdownload"},
 	}
+	team := TeamData{IncludedVolume: 300000}
+	role := TeamRoleData{Assignable: true, Permissions: []RbacPermission{RbacPermissionMembersManage}}
+	assignment := UpdateTeamMemberAssignmentData{
+		RoleID:        "role_123",
+		ProjectAccess: map[string]interface{}{"scope": "selected"},
+	}
+	domain := DomainData{DkimMode: DkimModeManagedCname, RotationReady: true}
+	suppressedRecipient := SuppressedRecipientData{SourceMessage: &SuppressionSourceMessageData{ID: "msg_123", Available: true}}
+	message := MessageListData{SpamScore: floatPtr(2.5)}
 
 	if routeUpdate.Settings.RedactEmailContent == nil ||
 		routeUpdate.InboundSettings.InboundSpamThreshold == nil ||
@@ -250,7 +300,15 @@ func TestAPITypesMatchCurrentTeamSchema(t *testing.T) {
 		projectCreate.ShortToken == nil ||
 		!project.RedactEmailContent ||
 		suppression.Scope != SuppressionScopeGlobal ||
-		blockedFileTypes.MimeTypes[0] != "application/x-msdownload" {
+		blockedFileTypes.MimeTypes[0] != "application/x-msdownload" ||
+		team.IncludedVolume != 300000 ||
+		!role.Assignable ||
+		role.Permissions[0] != RbacPermissionMembersManage ||
+		assignment.RoleID != "role_123" ||
+		domain.DkimMode != DkimModeManagedCname ||
+		suppressedRecipient.SourceMessage.ID != "msg_123" ||
+		message.SpamScore == nil ||
+		routeUpdate.Settings.Tls == nil {
 		t.Fatalf("generated API types do not expose current Team schema additions")
 	}
 }
@@ -283,9 +341,6 @@ func TestAPIExposesDocumentedOperations(t *testing.T) {
 		"project.update":                 api.Projects.Update,
 		"project.destroy":                api.Projects.Delete,
 		"project.rotateToken":            api.Projects.RotateToken,
-		"project.updateMembers":          api.Projects.UpdateMembers,
-		"project.addMember":              api.Projects.AddMember,
-		"project.removeMember":           api.Projects.RemoveMember,
 		"route.index":                    api.Projects.Routes,
 		"route.store":                    api.Projects.CreateRoute,
 		"route.show":                     api.Routes.Retrieve,
@@ -299,7 +354,10 @@ func TestAPIExposesDocumentedOperations(t *testing.T) {
 		"team.show":                      api.Team.Retrieve,
 		"team.update":                    api.Team.Update,
 		"team.usage":                     api.Team.Usage,
+		"team.roles":                     api.Team.Roles,
 		"team.members":                   api.Team.Members,
+		"team.members.show":              api.Team.Member,
+		"team.members.assignment.update": api.Team.UpdateMemberAssignment,
 		"webhook.index":                  api.Webhooks.List,
 		"webhook.store":                  api.Webhooks.Create,
 		"webhook.show":                   api.Webhooks.Retrieve,
@@ -319,5 +377,9 @@ func TestAPIExposesDocumentedOperations(t *testing.T) {
 }
 
 func floatPtr(value float64) *float64 {
+	return &value
+}
+
+func tlsPolicyPtr(value TlsPolicy) *TlsPolicy {
 	return &value
 }

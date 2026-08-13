@@ -13,6 +13,8 @@ import (
 func TestEmailBuilder_FluentAPI(t *testing.T) {
 	client, _ := New("test-token")
 	ctx := context.Background()
+	trackOpens := false
+	trackClicks := true
 
 	builder := client.Email(ctx).
 		From("sender@example.com").
@@ -23,9 +25,21 @@ func TestEmailBuilder_FluentAPI(t *testing.T) {
 		Subject("Test Subject").
 		HTML("<p>HTML Body</p>").
 		Text("Text Body").
-		Header("X-Custom", "value").
+		Headers(map[string]string{
+			"Message-ID":               "<ticket-123@example.com>",
+			"X-LM-Preserve-Message-ID": "true",
+		}).
 		Attach("file.txt", "Y29udGVudA==").
 		AttachWithContentID("logo.png", "aW1hZ2U=", "logo").
+		AttachWithOptions("invite.ics", "aWNhbA==", AttachmentOptions{
+			ContentID:   "invite",
+			ContentType: "text/calendar",
+		}).
+		Settings(EmailSettings{
+			TrackOpens:  &trackOpens,
+			TrackClicks: &trackClicks,
+			TLS:         TlsPolicy("enforced"),
+		}).
 		MetadataValue("key", "value").
 		Tag("test-tag").
 		Route("test-route").
@@ -56,11 +70,17 @@ func TestEmailBuilder_FluentAPI(t *testing.T) {
 	if builder.payload.Text != "Text Body" {
 		t.Errorf("Text = %v, want Text Body", builder.payload.Text)
 	}
-	if builder.payload.Headers["X-Custom"] != "value" {
-		t.Errorf("Headers[X-Custom] = %v, want value", builder.payload.Headers["X-Custom"])
+	if builder.payload.Headers["X-LM-Preserve-Message-ID"] != "true" {
+		t.Errorf("Headers[X-LM-Preserve-Message-ID] = %v, want true", builder.payload.Headers["X-LM-Preserve-Message-ID"])
 	}
-	if len(builder.payload.Attachments) != 2 {
-		t.Errorf("Attachments count = %v, want 2", len(builder.payload.Attachments))
+	if len(builder.payload.Attachments) != 3 {
+		t.Errorf("Attachments count = %v, want 3", len(builder.payload.Attachments))
+	}
+	if builder.payload.Attachments[2].ContentType != "text/calendar" {
+		t.Errorf("Attachments[2].ContentType = %v, want text/calendar", builder.payload.Attachments[2].ContentType)
+	}
+	if builder.payload.Settings == nil || builder.payload.Settings.TLS != TlsPolicy("enforced") {
+		t.Errorf("Settings = %#v, want enforced TLS", builder.payload.Settings)
 	}
 	if builder.payload.Metadata["key"] != "value" {
 		t.Errorf("Metadata[key] = %v, want value", builder.payload.Metadata["key"])

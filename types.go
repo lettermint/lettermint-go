@@ -23,6 +23,22 @@ type Attachment struct {
 	// ContentID is the Content-ID for inline attachments (optional).
 	// Used for embedding images in HTML via cid: references.
 	ContentID string `json:"content_id,omitempty"`
+
+	// ContentType is the MIME type of the attachment (optional).
+	ContentType string `json:"content_type,omitempty"`
+}
+
+// AttachmentOptions contains optional attachment metadata.
+type AttachmentOptions struct {
+	ContentID   string
+	ContentType string
+}
+
+// EmailSettings contains per-email route overrides.
+type EmailSettings struct {
+	TrackOpens  *bool     `json:"track_opens,omitempty"`
+	TrackClicks *bool     `json:"track_clicks,omitempty"`
+	TLS         TlsPolicy `json:"tls,omitempty"`
 }
 
 // emailPayload is the internal structure sent to the API.
@@ -40,6 +56,7 @@ type emailPayload struct {
 	Route       string            `json:"route,omitempty"`
 	Metadata    map[string]string `json:"metadata,omitempty"`
 	Tag         string            `json:"tag,omitempty"`
+	Settings    *EmailSettings    `json:"settings,omitempty"`
 }
 
 // WebhookEvent represents a parsed webhook payload from Lettermint.
