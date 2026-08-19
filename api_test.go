@@ -268,9 +268,10 @@ func TestAPITypesMatchCurrentTeamSchema(t *testing.T) {
 	redact := false
 	routeUpdate := UpdateRouteData{
 		Settings: &UpdateRouteSettingsData{
-			RedactEmailContent:        &redact,
-			GeneratePlaintextFallback: &redact,
-			Tls:                       tlsPolicyPtr(TlsPolicyEnforced),
+			RedactEmailContent:           &redact,
+			GeneratePlaintextFallback:    &redact,
+			SuppressDisposableRecipients: &redact,
+			Tls:                          tlsPolicyPtr(TlsPolicyEnforced),
 		},
 		InboundSettings: &UpdateRouteInboundSettingsData{
 			InboundSpamThreshold: floatPtr(3),
@@ -292,7 +293,7 @@ func TestAPITypesMatchCurrentTeamSchema(t *testing.T) {
 	}
 	domain := DomainData{DkimMode: DkimModeManagedCname, RotationReady: true}
 	suppressedRecipient := SuppressedRecipientData{SourceMessage: &SuppressionSourceMessageData{ID: "msg_123", Available: true}}
-	message := MessageListData{SpamScore: floatPtr(2.5)}
+	message := MessageListData{SpamScore: floatPtr(2.5), Tags: []map[string]interface{}{{"name": "campaign", "value": "welcome-v2"}}}
 
 	if routeUpdate.Settings.RedactEmailContent == nil ||
 		routeUpdate.InboundSettings.InboundSpamThreshold == nil ||
@@ -308,6 +309,8 @@ func TestAPITypesMatchCurrentTeamSchema(t *testing.T) {
 		domain.DkimMode != DkimModeManagedCname ||
 		suppressedRecipient.SourceMessage.ID != "msg_123" ||
 		message.SpamScore == nil ||
+		message.Tags[0]["name"] != "campaign" ||
+		routeUpdate.Settings.SuppressDisposableRecipients == nil ||
 		routeUpdate.Settings.Tls == nil {
 		t.Fatalf("generated API types do not expose current Team schema additions")
 	}
