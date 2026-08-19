@@ -32,6 +32,7 @@ type SendMailRequest struct {
 	Headers     map[string]string        `json:"headers,omitempty"`
 	Metadata    map[string]string        `json:"metadata,omitempty"`
 	Tag         *string                  `json:"tag,omitempty"`
+	Tags        []map[string]interface{} `json:"tags,omitempty"`
 	Settings    map[string]interface{}   `json:"settings,omitempty"`
 	HTML        *string                  `json:"html,omitempty"`
 	Text        *string                  `json:"text,omitempty"`
@@ -165,31 +166,34 @@ type MessageAttachmentData struct {
 }
 
 type MessageData struct {
-	ID              string                  `json:"id"`
-	Type            MessageType             `json:"type"`
-	Status          MessageStatus           `json:"status"`
-	StatusChangedAt *string                 `json:"status_changed_at"`
-	Tag             *string                 `json:"tag"`
-	FromEmail       string                  `json:"from_email"`
-	FromName        *string                 `json:"from_name"`
-	ReplyTo         []string                `json:"reply_to"`
-	Subject         *string                 `json:"subject"`
-	To              []MessageRecipientData  `json:"to"`
-	Cc              []MessageRecipientData  `json:"cc"`
-	Bcc             []MessageRecipientData  `json:"bcc"`
-	Attachments     []MessageAttachmentData `json:"attachments"`
-	Metadata        map[string]string       `json:"metadata"`
-	SpamScore       *float64                `json:"spam_score,omitempty"`
-	SpamSymbols     []SpamSymbol            `json:"spam_symbols,omitempty"`
-	RouteID         string                  `json:"route_id"`
-	CreatedAt       string                  `json:"created_at"`
+	ID              string                   `json:"id"`
+	Type            MessageType              `json:"type"`
+	Status          MessageStatus            `json:"status"`
+	StatusChangedAt *string                  `json:"status_changed_at"`
+	Tag             *string                  `json:"tag"`
+	Tags            []map[string]interface{} `json:"tags"`
+	FromEmail       string                   `json:"from_email"`
+	FromName        *string                  `json:"from_name"`
+	ReplyTo         []string                 `json:"reply_to"`
+	Subject         *string                  `json:"subject"`
+	To              []MessageRecipientData   `json:"to"`
+	Cc              []MessageRecipientData   `json:"cc"`
+	Bcc             []MessageRecipientData   `json:"bcc"`
+	Attachments     []MessageAttachmentData  `json:"attachments"`
+	Metadata        map[string]string        `json:"metadata"`
+	SpamScore       *float64                 `json:"spam_score,omitempty"`
+	SpamSymbols     []SpamSymbol             `json:"spam_symbols,omitempty"`
+	RouteID         string                   `json:"route_id"`
+	CreatedAt       string                   `json:"created_at"`
 }
 
 type MessageEventData struct {
-	MessageID string                 `json:"message_id"`
-	Event     MessageEventType       `json:"event"`
-	Metadata  map[string]interface{} `json:"metadata"`
-	Timestamp string                 `json:"timestamp"`
+	MessageID string                   `json:"message_id"`
+	Event     MessageEventType         `json:"event"`
+	Tag       *string                  `json:"tag"`
+	Tags      []map[string]interface{} `json:"tags"`
+	Metadata  map[string]interface{}   `json:"metadata"`
+	Timestamp string                   `json:"timestamp"`
 }
 
 type MessageEventType string
@@ -217,20 +221,21 @@ const (
 )
 
 type MessageListData struct {
-	ID              string                 `json:"id"`
-	Type            MessageType            `json:"type"`
-	Status          MessageStatus          `json:"status"`
-	SpamScore       *float64               `json:"spam_score,omitempty"`
-	FromEmail       string                 `json:"from_email"`
-	FromName        *string                `json:"from_name"`
-	Subject         *string                `json:"subject"`
-	To              []MessageRecipientData `json:"to"`
-	Cc              []MessageRecipientData `json:"cc"`
-	Bcc             []MessageRecipientData `json:"bcc"`
-	ReplyTo         []string               `json:"reply_to"`
-	Tag             *string                `json:"tag"`
-	StatusChangedAt *string                `json:"status_changed_at"`
-	CreatedAt       string                 `json:"created_at"`
+	ID              string                   `json:"id"`
+	Type            MessageType              `json:"type"`
+	Status          MessageStatus            `json:"status"`
+	SpamScore       *float64                 `json:"spam_score,omitempty"`
+	FromEmail       string                   `json:"from_email"`
+	FromName        *string                  `json:"from_name"`
+	Subject         *string                  `json:"subject"`
+	To              []MessageRecipientData   `json:"to"`
+	Cc              []MessageRecipientData   `json:"cc"`
+	Bcc             []MessageRecipientData   `json:"bcc"`
+	ReplyTo         []string                 `json:"reply_to"`
+	Tag             *string                  `json:"tag"`
+	Tags            []map[string]interface{} `json:"tags"`
+	StatusChangedAt *string                  `json:"status_changed_at"`
+	CreatedAt       string                   `json:"created_at"`
 }
 
 type MessageRecipientData struct {
@@ -653,13 +658,14 @@ type UpdateRouteInboundSettingsData struct {
 }
 
 type UpdateRouteSettingsData struct {
-	TrackOpens                *bool      `json:"track_opens,omitempty"`
-	TrackClicks               *bool      `json:"track_clicks,omitempty"`
-	GeneratePlaintextFallback *bool      `json:"generate_plaintext_fallback,omitempty"`
-	SuppressAutoResponders    *bool      `json:"suppress_auto_responders,omitempty"`
-	Tls                       *TlsPolicy `json:"tls,omitempty"`
-	DisableHostedUnsubscribe  *bool      `json:"disable_hosted_unsubscribe,omitempty"`
-	RedactEmailContent        *bool      `json:"redact_email_content,omitempty"`
+	TrackOpens                   *bool      `json:"track_opens,omitempty"`
+	TrackClicks                  *bool      `json:"track_clicks,omitempty"`
+	GeneratePlaintextFallback    *bool      `json:"generate_plaintext_fallback,omitempty"`
+	SuppressAutoResponders       *bool      `json:"suppress_auto_responders,omitempty"`
+	SuppressDisposableRecipients *bool      `json:"suppress_disposable_recipients,omitempty"`
+	Tls                          *TlsPolicy `json:"tls,omitempty"`
+	DisableHostedUnsubscribe     *bool      `json:"disable_hosted_unsubscribe,omitempty"`
+	RedactEmailContent           *bool      `json:"redact_email_content,omitempty"`
 }
 
 type UpdateTeamData struct {
@@ -828,13 +834,9 @@ type MessageIndexResponse struct {
 type MessageShowResponse MessageData
 
 type MessageEventsResponse struct {
-	Data        []MessageEventData `json:"data"`
-	Path        *string            `json:"path"`
-	PerPage     int                `json:"per_page"`
-	NextCursor  *string            `json:"next_cursor"`
-	NextPageURL *string            `json:"next_page_url"`
-	PrevCursor  *string            `json:"prev_cursor"`
-	PrevPageURL *string            `json:"prev_page_url"`
+	Data  []MessageEventData     `json:"data"`
+	Links []string               `json:"links"`
+	Meta  map[string]interface{} `json:"meta"`
 }
 
 type ProjectIndexResponse struct {

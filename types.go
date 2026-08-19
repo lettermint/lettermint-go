@@ -43,20 +43,21 @@ type EmailSettings struct {
 
 // emailPayload is the internal structure sent to the API.
 type emailPayload struct {
-	From        string            `json:"from"`
-	To          []string          `json:"to"`
-	Subject     string            `json:"subject"`
-	HTML        string            `json:"html,omitempty"`
-	Text        string            `json:"text,omitempty"`
-	CC          []string          `json:"cc,omitempty"`
-	BCC         []string          `json:"bcc,omitempty"`
-	ReplyTo     []string          `json:"reply_to,omitempty"`
-	Headers     map[string]string `json:"headers,omitempty"`
-	Attachments []Attachment      `json:"attachments,omitempty"`
-	Route       string            `json:"route,omitempty"`
-	Metadata    map[string]string `json:"metadata,omitempty"`
-	Tag         string            `json:"tag,omitempty"`
-	Settings    *EmailSettings    `json:"settings,omitempty"`
+	From        string              `json:"from"`
+	To          []string            `json:"to"`
+	Subject     string              `json:"subject"`
+	HTML        string              `json:"html,omitempty"`
+	Text        string              `json:"text,omitempty"`
+	CC          []string            `json:"cc,omitempty"`
+	BCC         []string            `json:"bcc,omitempty"`
+	ReplyTo     []string            `json:"reply_to,omitempty"`
+	Headers     map[string]string   `json:"headers,omitempty"`
+	Attachments []Attachment        `json:"attachments,omitempty"`
+	Route       string              `json:"route,omitempty"`
+	Metadata    map[string]string   `json:"metadata,omitempty"`
+	Tag         string              `json:"tag,omitempty"`
+	Tags        []map[string]string `json:"tags,omitempty"`
+	Settings    *EmailSettings      `json:"settings,omitempty"`
 }
 
 // WebhookEvent represents a parsed webhook payload from Lettermint.

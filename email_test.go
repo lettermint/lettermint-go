@@ -42,6 +42,7 @@ func TestEmailBuilder_FluentAPI(t *testing.T) {
 		}).
 		MetadataValue("key", "value").
 		Tag("test-tag").
+		Tags(map[string]string{"name": "campaign", "value": "welcome-v2"}).
 		Route("test-route").
 		IdempotencyKey("test-key")
 
@@ -87,6 +88,9 @@ func TestEmailBuilder_FluentAPI(t *testing.T) {
 	}
 	if builder.payload.Tag != "test-tag" {
 		t.Errorf("Tag = %v, want test-tag", builder.payload.Tag)
+	}
+	if len(builder.payload.Tags) != 1 || builder.payload.Tags[0]["name"] != "campaign" || builder.payload.Tags[0]["value"] != "welcome-v2" {
+		t.Errorf("Tags = %#v, want campaign/welcome-v2", builder.payload.Tags)
 	}
 	if builder.payload.Route != "test-route" {
 		t.Errorf("Route = %v, want test-route", builder.payload.Route)

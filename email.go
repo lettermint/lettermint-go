@@ -178,6 +178,20 @@ func (b *EmailBuilder) Tag(tag string) *EmailBuilder {
 	return b
 }
 
+// Tags sets reusable name-value tags for the email.
+//
+// Each tag name and value must use the format required by the Sending API.
+func (b *EmailBuilder) Tags(tags ...map[string]string) *EmailBuilder {
+	b.payload.Tags = make([]map[string]string, 0, len(tags))
+	for _, tag := range tags {
+		b.payload.Tags = append(b.payload.Tags, map[string]string{
+			"name":  tag["name"],
+			"value": tag["value"],
+		})
+	}
+	return b
+}
+
 // Route sets the routing key for the email.
 //
 // Routes determine which sending configuration to use.
