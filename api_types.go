@@ -5,6 +5,7 @@ package lettermint
 type MessageStatus string
 
 const (
+	MessageStatusScheduled      MessageStatus = "scheduled"
 	MessageStatusPending        MessageStatus = "pending"
 	MessageStatusQueued         MessageStatus = "queued"
 	MessageStatusSuppressed     MessageStatus = "suppressed"
@@ -19,6 +20,7 @@ const (
 	MessageStatusBlocked        MessageStatus = "blocked"
 	MessageStatusPolicyRejected MessageStatus = "policy_rejected"
 	MessageStatusUnsubscribed   MessageStatus = "unsubscribed"
+	MessageStatusCanceled       MessageStatus = "canceled"
 )
 
 type SendMailRequest struct {
@@ -29,6 +31,7 @@ type SendMailRequest struct {
 	Bcc         []string                 `json:"bcc,omitempty"`
 	ReplyTo     []string                 `json:"reply_to,omitempty"`
 	Subject     string                   `json:"subject"`
+	ScheduledAt *string                  `json:"scheduled_at,omitempty"`
 	Headers     map[string]string        `json:"headers,omitempty"`
 	Metadata    map[string]string        `json:"metadata,omitempty"`
 	Tag         *string                  `json:"tag,omitempty"`
@@ -170,6 +173,7 @@ type MessageData struct {
 	Type            MessageType              `json:"type"`
 	Status          MessageStatus            `json:"status"`
 	StatusChangedAt *string                  `json:"status_changed_at"`
+	ScheduledAt     *string                  `json:"scheduled_at"`
 	Tag             *string                  `json:"tag"`
 	Tags            []map[string]interface{} `json:"tags"`
 	FromEmail       string                   `json:"from_email"`
@@ -199,6 +203,10 @@ type MessageEventData struct {
 type MessageEventType string
 
 const (
+	MessageEventTypeScheduled          MessageEventType = "scheduled"
+	MessageEventTypeRescheduled        MessageEventType = "rescheduled"
+	MessageEventTypeCanceled           MessageEventType = "canceled"
+	MessageEventTypeReleased           MessageEventType = "released"
 	MessageEventTypeQueued             MessageEventType = "queued"
 	MessageEventTypeProcessed          MessageEventType = "processed"
 	MessageEventTypeSuppressed         MessageEventType = "suppressed"
@@ -224,6 +232,7 @@ type MessageListData struct {
 	ID              string                   `json:"id"`
 	Type            MessageType              `json:"type"`
 	Status          MessageStatus            `json:"status"`
+	ScheduledAt     *string                  `json:"scheduled_at"`
 	SpamScore       *float64                 `json:"spam_score,omitempty"`
 	FromEmail       string                   `json:"from_email"`
 	FromName        *string                  `json:"from_name"`
@@ -236,6 +245,16 @@ type MessageListData struct {
 	Tags            []map[string]interface{} `json:"tags"`
 	StatusChangedAt *string                  `json:"status_changed_at"`
 	CreatedAt       string                   `json:"created_at"`
+}
+
+type RescheduleMessageRequest struct {
+	ScheduledAt string `json:"scheduled_at"`
+}
+
+type MessageScheduleResponse struct {
+	MessageID   string         `json:"message_id"`
+	Status      *MessageStatus `json:"status"`
+	ScheduledAt *string        `json:"scheduled_at"`
 }
 
 type MessageRecipientData struct {
@@ -773,8 +792,9 @@ type WebhookListData struct {
 }
 
 type SendMailResponse struct {
-	MessageID string        `json:"message_id"`
-	Status    MessageStatus `json:"status"`
+	MessageID   *string       `json:"message_id"`
+	Status      MessageStatus `json:"status"`
+	ScheduledAt *string       `json:"scheduled_at,omitempty"`
 }
 
 type SendBatchMailResponse []SendMailResponse

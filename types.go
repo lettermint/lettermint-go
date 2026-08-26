@@ -10,6 +10,9 @@ type SendResponse struct {
 	// Status is the current status of the message.
 	// Possible values: pending, queued, processed, delivered, soft_bounced, hard_bounced, failed
 	Status string `json:"status"`
+
+	// ScheduledAt is the requested delivery time for a scheduled message.
+	ScheduledAt *string `json:"scheduled_at,omitempty"`
 }
 
 // Attachment represents an email attachment.
@@ -46,6 +49,7 @@ type emailPayload struct {
 	From        string              `json:"from"`
 	To          []string            `json:"to"`
 	Subject     string              `json:"subject"`
+	ScheduledAt string              `json:"scheduled_at,omitempty"`
 	HTML        string              `json:"html,omitempty"`
 	Text        string              `json:"text,omitempty"`
 	CC          []string            `json:"cc,omitempty"`

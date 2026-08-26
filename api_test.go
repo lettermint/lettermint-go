@@ -71,6 +71,46 @@ func TestAPIBlockedFileTypesUsesBearerAuth(t *testing.T) {
 	}
 }
 
+func TestMessageScheduleEndpoints(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if got := r.Header.Get("Authorization"); got != "Bearer api-token" {
+			t.Fatalf("Authorization = %s, want bearer token", got)
+		}
+		switch r.URL.Path {
+		case "/messages/message/id":
+			if r.Method != http.MethodPatch {
+				t.Fatalf("method = %s, want PATCH", r.Method)
+			}
+			var payload RescheduleMessageRequest
+			if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+				t.Fatalf("decode payload: %v", err)
+			}
+			if payload.ScheduledAt != "2026-08-27T09:00:00Z" {
+				t.Fatalf("scheduled_at = %q", payload.ScheduledAt)
+			}
+		case "/messages/message/id/cancel":
+			if r.Method != http.MethodPost {
+				t.Fatalf("method = %s, want POST", r.Method)
+			}
+		default:
+			t.Fatalf("unexpected path %s", r.URL.Path)
+		}
+		_ = json.NewEncoder(w).Encode(MessageScheduleResponse{MessageID: "message/id"})
+	}))
+	defer server.Close()
+
+	api, err := NewAPI("api-token", WithBaseURL(server.URL))
+	if err != nil {
+		t.Fatalf("NewAPI() error = %v", err)
+	}
+	if _, err := api.Messages.Reschedule(context.Background(), "message/id", RescheduleMessageRequest{ScheduledAt: "2026-08-27T09:00:00Z"}); err != nil {
+		t.Fatalf("Reschedule() error = %v", err)
+	}
+	if _, err := api.Messages.Cancel(context.Background(), "message/id"); err != nil {
+		t.Fatalf("Cancel() error = %v", err)
+	}
+}
+
 func TestClientPingAndSendBatchUseSendingAuth(t *testing.T) {
 	seenPaths := map[string]bool{}
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

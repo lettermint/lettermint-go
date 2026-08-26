@@ -200,6 +200,13 @@ func (b *EmailBuilder) Route(route string) *EmailBuilder {
 	return b
 }
 
+// ScheduledAt sets the delivery time for the email.
+// The Sending API accepts an ISO 8601 timestamp or a supported English time expression.
+func (b *EmailBuilder) ScheduledAt(scheduledAt string) *EmailBuilder {
+	b.payload.ScheduledAt = scheduledAt
+	return b
+}
+
 // IdempotencyKey sets an idempotency key to prevent duplicate sends.
 //
 // If you provide the same idempotency key for multiple requests,
