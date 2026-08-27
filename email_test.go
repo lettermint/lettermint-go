@@ -240,6 +240,9 @@ func TestEmailBuilder_Send_Success(t *testing.T) {
 		if payload.From != "sender@example.com" {
 			t.Errorf("payload.From = %v, want sender@example.com", payload.From)
 		}
+		if payload.ScheduledAt != "2026-08-27T09:00:00Z" {
+			t.Errorf("payload.ScheduledAt = %v", payload.ScheduledAt)
+		}
 
 		// Send response
 		w.Header().Set("Content-Type", "application/json")
@@ -258,6 +261,7 @@ func TestEmailBuilder_Send_Success(t *testing.T) {
 		From("sender@example.com").
 		To("recipient@example.com").
 		Subject("Test").
+		ScheduledAt("2026-08-27T09:00:00Z").
 		HTML("<p>Body</p>").
 		Send()
 
