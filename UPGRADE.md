@@ -4,11 +4,22 @@ This guide covers upgrading from the latest released v1 Go SDK to v2.
 
 ## Highlights
 
+- The module path is `github.com/lettermint/lettermint-go/v2`.
 - Sending email continues to use `lettermint.New(token)`.
 - The full Lettermint API is available through `lettermint.NewAPI(token)`.
 - Sending tokens use `x-lettermint-token`; full API tokens use `Authorization: Bearer`.
 - `Ping` returns the raw trimmed `pong` response.
 - API request and response structs are generated from the OpenAPI specs.
+
+## Module path
+
+```bash
+go get github.com/lettermint/lettermint-go/v2
+```
+
+```go
+import lettermint "github.com/lettermint/lettermint-go/v2"
+```
 
 ## Sending
 
