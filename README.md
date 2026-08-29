@@ -3,7 +3,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 [![Build](https://github.com/lettermint/lettermint-go/actions/workflows/ci.yaml/badge.svg)](https://github.com/lettermint/lettermint-go/actions/workflows/ci.yaml)
 [![Release](https://img.shields.io/github/release/lettermint/lettermint-go.svg?style=flat-square)](https://github.com/lettermint/lettermint-go/releases)
-[![Go Reference](https://pkg.go.dev/badge/github.com/lettermint/lettermint-go.svg)](https://pkg.go.dev/github.com/lettermint/lettermint-go)
+[![Go Reference](https://pkg.go.dev/badge/github.com/lettermint/lettermint-go/v2.svg)](https://pkg.go.dev/github.com/lettermint/lettermint-go/v2)
 [![Join our Discord server](https://img.shields.io/discord/1305510095588819035?logo=discord&logoColor=eee&label=Discord&labelColor=464ce5&color=0D0E28&cacheSeconds=43200)](https://lettermint.co/r/discord)
 
 The official Go SDK for [Lettermint](https://lettermint.co).
@@ -15,7 +15,7 @@ The official Go SDK for [Lettermint](https://lettermint.co).
 ## Installation
 
 ```bash
-go get github.com/lettermint/lettermint-go
+go get github.com/lettermint/lettermint-go/v2
 ```
 
 ## Usage
@@ -25,7 +25,7 @@ go get github.com/lettermint/lettermint-go
 Use a project sending token with `lettermint.New(...)`. Sending tokens authenticate with the `x-lettermint-token` header.
 
 ```go
-import lettermint "github.com/lettermint/lettermint-go"
+import lettermint "github.com/lettermint/lettermint-go/v2"
 
 client, err := lettermint.New("your-sending-token")
 if err != nil {

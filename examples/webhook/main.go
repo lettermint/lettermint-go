@@ -18,7 +18,7 @@ import (
 	"net/http"
 	"os"
 
-	lettermint "github.com/lettermint/lettermint-go"
+	lettermint "github.com/lettermint/lettermint-go/v2"
 )
 
 func main() {
