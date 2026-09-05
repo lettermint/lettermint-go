@@ -8,6 +8,7 @@ const (
 	MessageStatusScheduled      MessageStatus = "scheduled"
 	MessageStatusPending        MessageStatus = "pending"
 	MessageStatusQueued         MessageStatus = "queued"
+	MessageStatusQuarantined    MessageStatus = "quarantined"
 	MessageStatusSuppressed     MessageStatus = "suppressed"
 	MessageStatusProcessed      MessageStatus = "processed"
 	MessageStatusDelivered      MessageStatus = "delivered"
@@ -224,6 +225,7 @@ const (
 	MessageEventTypeInboundReceived    MessageEventType = "inbound_received"
 	MessageEventTypeInboundQueued      MessageEventType = "inbound_queued"
 	MessageEventTypeInboundSpamBlocked MessageEventType = "inbound_spam_blocked"
+	MessageEventTypeInboundReleased    MessageEventType = "inbound_released"
 	MessageEventTypeInboundProcessed   MessageEventType = "inbound_processed"
 	MessageEventTypeInboundRetry       MessageEventType = "inbound_retry"
 )
@@ -857,6 +859,10 @@ type MessageEventsResponse struct {
 	Data  []MessageEventData     `json:"data"`
 	Links []string               `json:"links"`
 	Meta  map[string]interface{} `json:"meta"`
+}
+
+type ProcessInboundMessageResponse struct {
+	Data map[string]interface{} `json:"data"`
 }
 
 type ProjectIndexResponse struct {

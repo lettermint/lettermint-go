@@ -92,6 +92,10 @@ func TestMessageScheduleEndpoints(t *testing.T) {
 			if r.Method != http.MethodPost {
 				t.Fatalf("method = %s, want POST", r.Method)
 			}
+		case "/messages/message/id/process":
+			if r.Method != http.MethodPost {
+				t.Fatalf("method = %s, want POST", r.Method)
+			}
 		default:
 			t.Fatalf("unexpected path %s", r.URL.Path)
 		}
@@ -108,6 +112,9 @@ func TestMessageScheduleEndpoints(t *testing.T) {
 	}
 	if _, err := api.Messages.Cancel(context.Background(), "message/id"); err != nil {
 		t.Fatalf("Cancel() error = %v", err)
+	}
+	if _, err := api.Messages.Process(context.Background(), "message/id"); err != nil {
+		t.Fatalf("Process() error = %v", err)
 	}
 }
 
@@ -294,6 +301,9 @@ func TestWebhookUpdateSerializesFalseValues(t *testing.T) {
 func TestAPITypesMatchCurrentTeamSchema(t *testing.T) {
 	if MessageEventTypeAutoReplied != MessageEventType("auto_replied") {
 		t.Fatalf("MessageEventTypeAutoReplied = %q", MessageEventTypeAutoReplied)
+	}
+	if MessageStatusQuarantined != MessageStatus("quarantined") || MessageEventTypeInboundReleased != MessageEventType("inbound_released") {
+		t.Fatal("missing quarantined message API values")
 	}
 	if APIWebhookEventMessageAutoReplied != APIWebhookEvent("message.auto_replied") {
 		t.Fatalf("APIWebhookEventMessageAutoReplied = %q", APIWebhookEventMessageAutoReplied)

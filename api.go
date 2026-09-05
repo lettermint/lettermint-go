@@ -141,6 +141,12 @@ func (s *MessagesService) Cancel(ctx context.Context, messageID string) (Message
 	return out, err
 }
 
+func (s *MessagesService) Process(ctx context.Context, messageID string) (ProcessInboundMessageResponse, error) {
+	var out ProcessInboundMessageResponse
+	err := s.client.doJSON(ctx, http.MethodPost, "/messages/"+segment(messageID)+"/process", nil, nil, &out)
+	return out, err
+}
+
 func (s *MessagesService) Events(ctx context.Context, messageID string) (MessageEventsResponse, error) {
 	var out MessageEventsResponse
 	err := s.client.doJSON(ctx, http.MethodGet, "/messages/"+segment(messageID)+"/events", nil, nil, &out)
