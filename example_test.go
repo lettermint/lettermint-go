@@ -73,6 +73,7 @@ func ExampleClient_Email_advanced() {
 			"campaign_id": "dec-2024",
 		}).
 		Tag("monthly-report").
+		MessageTags(lettermint.MessageTag{Name: "campaign", Value: "monthly-report"}).
 		IdempotencyKey("report-dec-2024").
 		Send()
 
