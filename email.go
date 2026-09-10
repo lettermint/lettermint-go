@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"regexp"
 	"runtime"
 	"strings"
 )
@@ -182,13 +183,16 @@ func (b *EmailBuilder) Tag(tag string) *EmailBuilder {
 //
 // Each tag name and value must use the format required by the Sending API.
 func (b *EmailBuilder) Tags(tags ...map[string]string) *EmailBuilder {
-	b.payload.Tags = make([]map[string]string, 0, len(tags))
+	b.payload.Tags = make([]MessageTag, 0, len(tags))
 	for _, tag := range tags {
-		b.payload.Tags = append(b.payload.Tags, map[string]string{
-			"name":  tag["name"],
-			"value": tag["value"],
-		})
+		b.payload.Tags = append(b.payload.Tags, MessageTag{Name: tag["name"], Value: tag["value"]})
 	}
+	return b
+}
+
+// MessageTags sets typed reusable name-value tags for the email.
+func (b *EmailBuilder) MessageTags(tags ...MessageTag) *EmailBuilder {
+	b.payload.Tags = append([]MessageTag(nil), tags...)
 	return b
 }
 
@@ -301,6 +305,31 @@ func (b *EmailBuilder) validate() error {
 	}
 	if b.payload.HTML == "" && b.payload.Text == "" {
 		return fmt.Errorf("either html or text body is required")
+	}
+	maximum := 20
+	if b.payload.Tag != "" {
+		maximum = 19
+	}
+	if len(b.payload.Tags) > maximum {
+		return fmt.Errorf("no more than %d message tags are permitted", maximum)
+	}
+	namePattern := regexp.MustCompile(`^[A-Za-z0-9_-]{1,32}$`)
+	valuePattern := regexp.MustCompile(`^[A-Za-z0-9_-]{1,64}$`)
+	names := make(map[string]struct{}, len(b.payload.Tags))
+	for _, tag := range b.payload.Tags {
+		if !namePattern.MatchString(tag.Name) {
+			return fmt.Errorf("message tag names must match ^[A-Za-z0-9_-]{1,32}$")
+		}
+		if strings.HasPrefix(strings.ToLower(tag.Name), "__lettermint") {
+			return fmt.Errorf("message tag names must not start with __lettermint")
+		}
+		if !valuePattern.MatchString(tag.Value) {
+			return fmt.Errorf("message tag values must match ^[A-Za-z0-9_-]{1,64}$")
+		}
+		if _, exists := names[tag.Name]; exists {
+			return fmt.Errorf("message tag names must be unique and case-sensitive")
+		}
+		names[tag.Name] = struct{}{}
 	}
 	return nil
 }

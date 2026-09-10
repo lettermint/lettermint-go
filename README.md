@@ -76,6 +76,10 @@ resp, err := client.Email(ctx).
         "user_id": "12345",
     }).
     Tag("campaign-123").
+    MessageTags(
+        lettermint.MessageTag{Name: "campaign", Value: "welcome"},
+        lettermint.MessageTag{Name: "customer", Value: "new"},
+    ).
     Send()
 ```
 
@@ -250,6 +254,8 @@ client, err := lettermint.New("your-sending-token",
 - `Metadata(metadata map[string]string)`: Set metadata
 - `MetadataValue(key, value string)`: Set a single metadata value
 - `Tag(tag string)`: Set a tag
+- `MessageTags(tags ...MessageTag)`: Set typed reusable name/value tags
+- `Tags(tags ...map[string]string)`: Set reusable tags with the legacy map form
 - `Send() (*SendResponse, error)`: Send the email
 
 ### Error Handling

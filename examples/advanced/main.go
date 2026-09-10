@@ -88,6 +88,8 @@ func main() {
 		MetadataValue("department", "sales").
 		// Tag for categorization
 		Tag("monthly-report").
+		// Typed reusable name/value tags
+		MessageTags(lettermint.MessageTag{Name: "campaign", Value: "monthly-report"}).
 		// Route (optional, for custom sending configuration)
 		Route("transactional").
 		// Idempotency key to prevent duplicate sends

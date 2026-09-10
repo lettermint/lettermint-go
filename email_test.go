@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -42,7 +43,7 @@ func TestEmailBuilder_FluentAPI(t *testing.T) {
 		}).
 		MetadataValue("key", "value").
 		Tag("test-tag").
-		Tags(map[string]string{"name": "campaign", "value": "welcome-v2"}).
+		MessageTags(MessageTag{Name: "campaign", Value: "welcome-v2"}).
 		Route("test-route").
 		IdempotencyKey("test-key")
 
@@ -89,7 +90,7 @@ func TestEmailBuilder_FluentAPI(t *testing.T) {
 	if builder.payload.Tag != "test-tag" {
 		t.Errorf("Tag = %v, want test-tag", builder.payload.Tag)
 	}
-	if len(builder.payload.Tags) != 1 || builder.payload.Tags[0]["name"] != "campaign" || builder.payload.Tags[0]["value"] != "welcome-v2" {
+	if len(builder.payload.Tags) != 1 || builder.payload.Tags[0].Name != "campaign" || builder.payload.Tags[0].Value != "welcome-v2" {
 		t.Errorf("Tags = %#v, want campaign/welcome-v2", builder.payload.Tags)
 	}
 	if builder.payload.Route != "test-route" {
@@ -97,6 +98,27 @@ func TestEmailBuilder_FluentAPI(t *testing.T) {
 	}
 	if builder.idempotencyKey != "test-key" {
 		t.Errorf("idempotencyKey = %v, want test-key", builder.idempotencyKey)
+	}
+}
+
+func TestEmailBuilder_MessageTagsValidation(t *testing.T) {
+	client, _ := New("test-token")
+	base := func() *EmailBuilder {
+		return client.Email(context.Background()).From("sender@example.com").To("recipient@example.com").Subject("Test").Text("body")
+	}
+
+	if _, err := base().MessageTags(MessageTag{Name: "same", Value: "one"}, MessageTag{Name: "same", Value: "two"}).Send(); err == nil {
+		t.Fatal("expected duplicate tag names to fail")
+	}
+	if _, err := base().MessageTags(MessageTag{Name: "__LETTERMINT_internal", Value: "one"}).Send(); err == nil {
+		t.Fatal("expected reserved tag name to fail")
+	}
+	tags := make([]MessageTag, 20)
+	for index := range tags {
+		tags[index] = MessageTag{Name: fmt.Sprintf("tag_%d", index), Value: "one"}
+	}
+	if _, err := base().Tag("legacy").MessageTags(tags...).Send(); err == nil {
+		t.Fatal("expected the legacy tag to count towards the limit")
 	}
 }
 
