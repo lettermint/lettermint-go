@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## v2.6.0 - 2026-09-14
+
+### What's Changed
+
+* feat: add typed message tags by @bjarn in https://github.com/lettermint/lettermint-go/pull/26
+* chore: add all team as code owners by @bjarn in https://github.com/lettermint/lettermint-go/pull/27
+
+**Full Changelog**: https://github.com/lettermint/lettermint-go/compare/v2.5.0...v2.6.0
+
 ## v2.5.0 - 2026-09-05
 
 ### What's Changed
