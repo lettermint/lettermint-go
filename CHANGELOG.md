@@ -83,6 +83,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 **Full Changelog**: https://github.com/lettermint/lettermint-go/compare/v1.1.0...v1.1.1
 
+## v1.1.0 - 2026-04-03
+
+### What's Changed
+
+* chore: add Discord badge to README.md by @bjarn in https://github.com/lettermint/lettermint-go/pull/6
+* ci: bump codecov/codecov-action from 4 to 5 by @dependabot[bot] in https://github.com/lettermint/lettermint-go/pull/2
+* ci: bump stefanzweifel/git-auto-commit-action from 5 to 7 by @dependabot[bot] in https://github.com/lettermint/lettermint-go/pull/3
+* ci: bump actions/checkout from 4 to 6 by @dependabot[bot] in https://github.com/lettermint/lettermint-go/pull/4
+* ci: bump actions/setup-go from 5 to 6 by @dependabot[bot] in https://github.com/lettermint/lettermint-go/pull/5
+* ci: bump dependabot/fetch-metadata from 2.4.0 to 2.5.0 by @dependabot[bot] in https://github.com/lettermint/lettermint-go/pull/7
+* ci: bump dependabot/fetch-metadata from 2.5.0 to 3.0.0 by @dependabot[bot] in https://github.com/lettermint/lettermint-go/pull/11
+* ci: bump codecov/codecov-action from 5 to 6 by @dependabot[bot] in https://github.com/lettermint/lettermint-go/pull/10
+* fix: changes the expected type for timestamp in the webhook payload to RFC 3339 by @joesiltberg in https://github.com/lettermint/lettermint-go/pull/9
+
+### New Contributors
+
+* @dependabot[bot] made their first contribution in https://github.com/lettermint/lettermint-go/pull/2
+* @joesiltberg made their first contribution in https://github.com/lettermint/lettermint-go/pull/9
+
+**Full Changelog**: https://github.com/lettermint/lettermint-go/compare/v1.0.1...v1.1.0
+
 ## v1.0.1 - 2025-12-23
 
 ### What's Changed
