@@ -461,6 +461,18 @@ func TestSendMailResponseMatchesSandboxContract(t *testing.T) {
 	}
 }
 
+func TestCompatibilityTypesRemainAvailable(t *testing.T) {
+	var scheduled MessageScheduleResponse = CancelScheduledMessageResponse{MessageID: "message-id"}
+	cursor := CursorPaginator{Data: []string{}, PerPage: 25}
+
+	if scheduled.MessageID != "message-id" {
+		t.Fatalf("MessageID = %q, want message-id", scheduled.MessageID)
+	}
+	if cursor.PerPage != 25 {
+		t.Fatalf("PerPage = %d, want 25", cursor.PerPage)
+	}
+}
+
 func floatPtr(value float64) *float64 {
 	return &value
 }

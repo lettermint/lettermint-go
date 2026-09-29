@@ -84,6 +84,17 @@ const (
 	BuiltInTeamRoleMember BuiltInTeamRole = "member"
 )
 
+// CursorPaginator is kept for source compatibility with earlier SDK releases.
+type CursorPaginator struct {
+	Data        []string `json:"data"`
+	Path        *string  `json:"path"`
+	PerPage     int      `json:"per_page"`
+	NextCursor  *string  `json:"next_cursor"`
+	NextPageURL *string  `json:"next_page_url"`
+	PrevCursor  *string  `json:"prev_cursor"`
+	PrevPageURL *string  `json:"prev_page_url"`
+}
+
 type DkimMode string
 
 const (
@@ -933,19 +944,18 @@ type BlockedFileTypesResponse struct {
 	MimeTypes  []string `json:"mime_types"`
 }
 
-type RescheduleMessageResponse struct {
+// MessageScheduleResponse is the shared response shape for scheduled-message changes.
+type MessageScheduleResponse struct {
 	MessageID   string         `json:"message_id"`
 	Status      *MessageStatus `json:"status"`
 	ScheduledAt *string        `json:"scheduled_at"`
 }
+
+type RescheduleMessageResponse = MessageScheduleResponse
 
 type MessageShowResponse MessageData
 
-type CancelScheduledMessageResponse struct {
-	MessageID   string         `json:"message_id"`
-	Status      *MessageStatus `json:"status"`
-	ScheduledAt *string        `json:"scheduled_at"`
-}
+type CancelScheduledMessageResponse = MessageScheduleResponse
 
 type MessageIndexResponse struct {
 	Data  []MessageListData      `json:"data"`
