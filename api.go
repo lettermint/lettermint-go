@@ -129,14 +129,14 @@ func (s *MessagesService) Retrieve(ctx context.Context, messageID string) (Messa
 	return out, err
 }
 
-func (s *MessagesService) Reschedule(ctx context.Context, messageID string, payload RescheduleMessageRequest) (MessageScheduleResponse, error) {
-	var out MessageScheduleResponse
+func (s *MessagesService) Reschedule(ctx context.Context, messageID string, payload RescheduleMessageRequest) (RescheduleMessageResponse, error) {
+	var out RescheduleMessageResponse
 	err := s.client.doJSON(ctx, http.MethodPatch, "/messages/"+segment(messageID), nil, payload, &out)
 	return out, err
 }
 
-func (s *MessagesService) Cancel(ctx context.Context, messageID string) (MessageScheduleResponse, error) {
-	var out MessageScheduleResponse
+func (s *MessagesService) Cancel(ctx context.Context, messageID string) (CancelScheduledMessageResponse, error) {
+	var out CancelScheduledMessageResponse
 	err := s.client.doJSON(ctx, http.MethodPost, "/messages/"+segment(messageID)+"/cancel", nil, nil, &out)
 	return out, err
 }

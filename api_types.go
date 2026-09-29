@@ -25,22 +25,23 @@ const (
 )
 
 type SendMailRequest struct {
-	Route       string                   `json:"route,omitempty"`
-	From        string                   `json:"from"`
-	To          []string                 `json:"to"`
-	Cc          []string                 `json:"cc,omitempty"`
-	Bcc         []string                 `json:"bcc,omitempty"`
-	ReplyTo     []string                 `json:"reply_to,omitempty"`
-	Subject     string                   `json:"subject"`
-	ScheduledAt *string                  `json:"scheduled_at,omitempty"`
-	Headers     map[string]string        `json:"headers,omitempty"`
-	Metadata    map[string]string        `json:"metadata,omitempty"`
-	Tag         *string                  `json:"tag,omitempty"`
-	Tags        []map[string]interface{} `json:"tags,omitempty"`
-	Settings    map[string]interface{}   `json:"settings,omitempty"`
-	HTML        *string                  `json:"html,omitempty"`
-	Text        *string                  `json:"text,omitempty"`
-	Attachments []map[string]interface{} `json:"attachments,omitempty"`
+	Route         string                   `json:"route,omitempty"`
+	From          string                   `json:"from"`
+	To            []string                 `json:"to"`
+	Cc            []string                 `json:"cc,omitempty"`
+	Bcc           []string                 `json:"bcc,omitempty"`
+	ReplyTo       []string                 `json:"reply_to,omitempty"`
+	Subject       string                   `json:"subject"`
+	ScheduledAt   string                   `json:"scheduled_at,omitempty"`
+	Headers       map[string]string        `json:"headers,omitempty"`
+	Metadata      map[string]string        `json:"metadata,omitempty"`
+	Tag           *string                  `json:"tag,omitempty"`
+	Tags          []map[string]interface{} `json:"tags,omitempty"`
+	Settings      map[string]interface{}   `json:"settings,omitempty"`
+	HTML          *string                  `json:"html,omitempty"`
+	Text          *string                  `json:"text,omitempty"`
+	Attachments   []map[string]interface{} `json:"attachments,omitempty"`
+	SandboxResult SandboxResult            `json:"sandbox_result,omitempty"`
 }
 
 type SendBatchMailRequest []SendMailRequest
@@ -50,6 +51,22 @@ type TlsPolicy string
 const (
 	TlsPolicyOpportunistic TlsPolicy = "opportunistic"
 	TlsPolicyEnforced      TlsPolicy = "enforced"
+)
+
+type SandboxResult string
+
+const (
+	SandboxResultDelivered     SandboxResult = "delivered"
+	SandboxResultHardBounced   SandboxResult = "hard_bounced"
+	SandboxResultSoftBounced   SandboxResult = "soft_bounced"
+	SandboxResultDeferred      SandboxResult = "deferred"
+	SandboxResultFailed        SandboxResult = "failed"
+	SandboxResultSuppressed    SandboxResult = "suppressed"
+	SandboxResultSpamComplaint SandboxResult = "spam_complaint"
+	SandboxResultAutoReplied   SandboxResult = "auto_replied"
+	SandboxResultOpened        SandboxResult = "opened"
+	SandboxResultClicked       SandboxResult = "clicked"
+	SandboxResultUnsubscribed  SandboxResult = "unsubscribed"
 )
 
 type AttachmentDelivery string
@@ -66,16 +83,6 @@ const (
 	BuiltInTeamRoleAdmin  BuiltInTeamRole = "admin"
 	BuiltInTeamRoleMember BuiltInTeamRole = "member"
 )
-
-type CursorPaginator struct {
-	Data        []string `json:"data"`
-	Path        *string  `json:"path"`
-	PerPage     int      `json:"per_page"`
-	NextCursor  *string  `json:"next_cursor"`
-	NextPageURL *string  `json:"next_page_url"`
-	PrevCursor  *string  `json:"prev_cursor"`
-	PrevPageURL *string  `json:"prev_page_url"`
-}
 
 type DkimMode string
 
@@ -190,6 +197,8 @@ type MessageData struct {
 	SpamSymbols     []SpamSymbol             `json:"spam_symbols,omitempty"`
 	RouteID         string                   `json:"route_id"`
 	CreatedAt       string                   `json:"created_at"`
+	DeliveryMode    DeliveryMode             `json:"delivery_mode"`
+	SandboxResult   *SandboxResult           `json:"sandbox_result"`
 }
 
 type MessageEventData struct {
@@ -247,21 +256,14 @@ type MessageListData struct {
 	Tags            []map[string]interface{} `json:"tags"`
 	StatusChangedAt *string                  `json:"status_changed_at"`
 	CreatedAt       string                   `json:"created_at"`
-}
-
-type RescheduleMessageRequest struct {
-	ScheduledAt string `json:"scheduled_at"`
-}
-
-type MessageScheduleResponse struct {
-	MessageID   string         `json:"message_id"`
-	Status      *MessageStatus `json:"status"`
-	ScheduledAt *string        `json:"scheduled_at"`
+	DeliveryMode    DeliveryMode             `json:"delivery_mode"`
+	SandboxResult   *SandboxResult           `json:"sandbox_result"`
 }
 
 type MessageRecipientData struct {
-	Email string  `json:"email"`
-	Name  *string `json:"name"`
+	Email         string         `json:"email"`
+	Name          *string        `json:"name"`
+	SandboxResult *SandboxResult `json:"sandbox_result"`
 }
 
 type MessageStatsData struct {
@@ -310,6 +312,7 @@ type ProjectData struct {
 	Last28Days         *MessageStatsData `json:"last_28_days,omitempty"`
 	CreatedAt          string            `json:"created_at"`
 	UpdatedAt          string            `json:"updated_at"`
+	DeliveryMode       DeliveryMode      `json:"delivery_mode"`
 }
 
 type ProjectListData struct {
@@ -386,6 +389,10 @@ const (
 	RecordTypeMX    RecordType = "MX"
 )
 
+type RescheduleMessageRequest struct {
+	ScheduledAt string `json:"scheduled_at"`
+}
+
 type RouteData struct {
 	ID                        string                 `json:"id"`
 	ProjectID                 string                 `json:"project_id"`
@@ -394,6 +401,7 @@ type RouteData struct {
 	RouteType                 RouteType              `json:"route_type"`
 	IsDefault                 bool                   `json:"is_default"`
 	InboundAddress            *string                `json:"inbound_address,omitempty"`
+	InboundMxHostname         string                 `json:"inbound_mx_hostname,omitempty"`
 	InboundDomain             *string                `json:"inbound_domain,omitempty"`
 	InboundDomainVerifiedAt   *string                `json:"inbound_domain_verified_at,omitempty"`
 	InboundSpamThreshold      *float64               `json:"inbound_spam_threshold,omitempty"`
@@ -521,6 +529,7 @@ type StoreProjectData struct {
 	SMTPEnabled   *bool         `json:"smtp_enabled,omitempty"`
 	InitialRoutes InitialRoutes `json:"initial_routes,omitempty"`
 	ShortToken    *bool         `json:"short_token,omitempty"`
+	DeliveryMode  DeliveryMode  `json:"delivery_mode,omitempty"`
 }
 
 type StoreRouteData struct {
@@ -530,21 +539,26 @@ type StoreRouteData struct {
 }
 
 type StoreSuppressionData struct {
-	Email     *string           `json:"email,omitempty"`
-	Emails    []string          `json:"emails,omitempty"`
-	Reason    SuppressionReason `json:"reason"`
-	Scope     SuppressionScope  `json:"scope"`
-	RouteID   *string           `json:"route_id,omitempty"`
-	ProjectID *string           `json:"project_id,omitempty"`
+	Email     *string               `json:"email,omitempty"`
+	Emails    []string              `json:"emails,omitempty"`
+	Reason    SuppressionReason     `json:"reason"`
+	Scope     SuppressionScope      `json:"scope"`
+	RouteID   *string               `json:"route_id,omitempty"`
+	ProjectID *string               `json:"project_id,omitempty"`
+	AppliesTo *SuppressionAppliesTo `json:"applies_to,omitempty"`
 }
 
 type StoreWebhookData struct {
-	RouteID              string            `json:"route_id"`
-	Name                 string            `json:"name"`
-	URL                  string            `json:"url"`
-	Events               []APIWebhookEvent `json:"events"`
-	Enabled              *bool             `json:"enabled,omitempty"`
-	IncludeMachineEvents *bool             `json:"include_machine_events,omitempty"`
+	Name                 string                     `json:"name"`
+	URL                  string                     `json:"url"`
+	Events               []APIWebhookEvent          `json:"events"`
+	Enabled              *bool                      `json:"enabled,omitempty"`
+	IncludeMachineEvents *bool                      `json:"include_machine_events,omitempty"`
+	Scope                *WebhookScope              `json:"scope,omitempty"`
+	ProjectIDs           []string                   `json:"project_ids,omitempty"`
+	RouteIDs             []string                   `json:"route_ids,omitempty"`
+	RouteID              *string                    `json:"route_id,omitempty"`
+	DeliveryModeFilter   *WebhookDeliveryModeFilter `json:"delivery_mode_filter,omitempty"`
 }
 
 type SuppressedRecipientData struct {
@@ -553,12 +567,19 @@ type SuppressedRecipientData struct {
 	Value         string                        `json:"value"`
 	Reason        SuppressionReason             `json:"reason"`
 	Scope         SuppressionScope              `json:"scope"`
+	AppliesTo     SuppressionAppliesTo          `json:"applies_to"`
 	ProjectID     *string                       `json:"project_id"`
 	RouteID       *string                       `json:"route_id"`
 	SourceMessage *SuppressionSourceMessageData `json:"source_message,omitempty"`
 	CreatedAt     string                        `json:"created_at"`
-	UpdatedAt     string                        `json:"updated_at"`
 }
+
+type SuppressionAppliesTo string
+
+const (
+	SuppressionAppliesToAll       SuppressionAppliesTo = "all"
+	SuppressionAppliesToBroadcast SuppressionAppliesTo = "broadcast"
+)
 
 type SuppressionReason string
 
@@ -572,7 +593,6 @@ const (
 type SuppressionScope string
 
 const (
-	SuppressionScopeGlobal  SuppressionScope = "global"
 	SuppressionScopeTeam    SuppressionScope = "team"
 	SuppressionScopeProject SuppressionScope = "project"
 	SuppressionScopeRoute   SuppressionScope = "route"
@@ -660,10 +680,11 @@ type UpdateDomainProjectsData struct {
 }
 
 type UpdateProjectData struct {
-	Name               *string `json:"name,omitempty"`
-	SMTPEnabled        *bool   `json:"smtp_enabled,omitempty"`
-	RedactEmailContent *bool   `json:"redact_email_content,omitempty"`
-	DefaultRouteID     *string `json:"default_route_id,omitempty"`
+	Name               *string       `json:"name,omitempty"`
+	SMTPEnabled        *bool         `json:"smtp_enabled,omitempty"`
+	RedactEmailContent *bool         `json:"redact_email_content,omitempty"`
+	DefaultRouteID     *string       `json:"default_route_id,omitempty"`
+	DeliveryMode       *DeliveryMode `json:"delivery_mode,omitempty"`
 }
 
 type UpdateRouteData struct {
@@ -699,31 +720,42 @@ type UpdateTeamMemberAssignmentData struct {
 }
 
 type UpdateWebhookData struct {
-	Name                 string            `json:"name,omitempty"`
-	URL                  string            `json:"url,omitempty"`
-	Events               []APIWebhookEvent `json:"events,omitempty"`
-	Enabled              *bool             `json:"enabled,omitempty"`
-	IncludeMachineEvents *bool             `json:"include_machine_events,omitempty"`
+	Name                 string                    `json:"name,omitempty"`
+	URL                  string                    `json:"url,omitempty"`
+	Events               []APIWebhookEvent         `json:"events,omitempty"`
+	Enabled              *bool                     `json:"enabled,omitempty"`
+	IncludeMachineEvents *bool                     `json:"include_machine_events,omitempty"`
+	Scope                WebhookScope              `json:"scope,omitempty"`
+	ProjectIDs           []string                  `json:"project_ids,omitempty"`
+	RouteIDs             []string                  `json:"route_ids,omitempty"`
+	RouteID              *string                   `json:"route_id,omitempty"`
+	DeliveryModeFilter   WebhookDeliveryModeFilter `json:"delivery_mode_filter,omitempty"`
 }
 
 type WebhookData struct {
-	ID                   string   `json:"id"`
-	RouteID              string   `json:"route_id"`
-	Name                 string   `json:"name"`
-	URL                  string   `json:"url"`
-	Events               []string `json:"events"`
-	Enabled              bool     `json:"enabled"`
-	IncludeMachineEvents bool     `json:"include_machine_events"`
-	Secret               string   `json:"secret,omitempty"`
-	LastCalledAt         *string  `json:"last_called_at"`
-	CreatedAt            string   `json:"created_at"`
-	UpdatedAt            string   `json:"updated_at"`
+	ID                   string                    `json:"id"`
+	Scope                WebhookScope              `json:"scope"`
+	ProjectIDs           []string                  `json:"project_ids"`
+	RouteIDs             []string                  `json:"route_ids"`
+	RouteID              *string                   `json:"route_id"`
+	Name                 string                    `json:"name"`
+	URL                  string                    `json:"url"`
+	Events               []string                  `json:"events"`
+	Enabled              bool                      `json:"enabled"`
+	IncludeMachineEvents bool                      `json:"include_machine_events"`
+	LastCalledAt         *string                   `json:"last_called_at"`
+	CreatedAt            string                    `json:"created_at"`
+	UpdatedAt            string                    `json:"updated_at"`
+	DeliveryModeFilter   WebhookDeliveryModeFilter `json:"delivery_mode_filter"`
 }
 
 type WebhookDeliveryData struct {
 	ID              string                `json:"id"`
 	WebhookID       string                `json:"webhook_id"`
 	EventType       APIWebhookEvent       `json:"event_type"`
+	SourceScope     *string               `json:"source_scope"`
+	SourceProjectID *string               `json:"source_project_id"`
+	SourceRouteID   *string               `json:"source_route_id"`
 	Status          WebhookDeliveryStatus `json:"status"`
 	AttemptNumber   int                   `json:"attempt_number"`
 	HttpStatusCode  *int                  `json:"http_status_code"`
@@ -734,18 +766,22 @@ type WebhookDeliveryData struct {
 	ErrorMessage    *string               `json:"error_message"`
 	DeliveredAt     *string               `json:"delivered_at"`
 	Timestamp       string                `json:"timestamp"`
+	Sandbox         bool                  `json:"sandbox"`
 }
 
 type WebhookDeliveryListData struct {
-	ID             string                `json:"id"`
-	WebhookID      string                `json:"webhook_id"`
-	EventType      APIWebhookEvent       `json:"event_type"`
-	Status         WebhookDeliveryStatus `json:"status"`
-	AttemptNumber  int                   `json:"attempt_number"`
-	HttpStatusCode *int                  `json:"http_status_code"`
-	DurationMs     *int                  `json:"duration_ms"`
-	DeliveredAt    *string               `json:"delivered_at"`
-	CreatedAt      string                `json:"created_at"`
+	ID              string                `json:"id"`
+	WebhookID       string                `json:"webhook_id"`
+	EventType       APIWebhookEvent       `json:"event_type"`
+	SourceScope     *string               `json:"source_scope"`
+	SourceProjectID *string               `json:"source_project_id"`
+	SourceRouteID   *string               `json:"source_route_id"`
+	Status          WebhookDeliveryStatus `json:"status"`
+	AttemptNumber   int                   `json:"attempt_number"`
+	HttpStatusCode  *int                  `json:"http_status_code"`
+	DurationMs      *int                  `json:"duration_ms"`
+	DeliveredAt     *string               `json:"delivered_at"`
+	CreatedAt       string                `json:"created_at"`
 }
 
 type WebhookDeliveryStatus string
@@ -776,27 +812,77 @@ const (
 	APIWebhookEventMessageClicked        APIWebhookEvent = "message.clicked"
 	APIWebhookEventMessageInbound        APIWebhookEvent = "message.inbound"
 	APIWebhookEventMessagePolicyRejected APIWebhookEvent = "message.policy_rejected"
+	APIWebhookEventMessageScheduled      APIWebhookEvent = "message.scheduled"
+	APIWebhookEventMessageRescheduled    APIWebhookEvent = "message.rescheduled"
+	APIWebhookEventMessageCanceled       APIWebhookEvent = "message.canceled"
+	APIWebhookEventMessageReleased       APIWebhookEvent = "message.released"
 	APIWebhookEventSuppressionAdded      APIWebhookEvent = "suppression.added"
 	APIWebhookEventSuppressionRemoved    APIWebhookEvent = "suppression.removed"
 	APIWebhookEventWebhookTest           APIWebhookEvent = "webhook.test"
 )
 
 type WebhookListData struct {
-	ID           string            `json:"id"`
-	RouteID      string            `json:"route_id"`
-	Name         string            `json:"name"`
-	URL          string            `json:"url"`
-	Events       []APIWebhookEvent `json:"events"`
-	Enabled      bool              `json:"enabled"`
-	LastCalledAt *string           `json:"last_called_at"`
-	CreatedAt    string            `json:"created_at"`
-	UpdatedAt    string            `json:"updated_at"`
+	ID           string       `json:"id"`
+	Scope        WebhookScope `json:"scope"`
+	ProjectIDs   []string     `json:"project_ids"`
+	RouteIDs     []string     `json:"route_ids"`
+	RouteID      *string      `json:"route_id"`
+	Name         string       `json:"name"`
+	URL          string       `json:"url"`
+	Events       []string     `json:"events"`
+	Enabled      bool         `json:"enabled"`
+	LastCalledAt *string      `json:"last_called_at"`
+	CreatedAt    string       `json:"created_at"`
+	UpdatedAt    string       `json:"updated_at"`
 }
 
+type WebhookScope string
+
+const (
+	WebhookScopeTeam    WebhookScope = "team"
+	WebhookScopeProject WebhookScope = "project"
+	WebhookScopeRoute   WebhookScope = "route"
+)
+
+type WebhookSecretData struct {
+	ID                   string                    `json:"id"`
+	Scope                WebhookScope              `json:"scope"`
+	ProjectIDs           []string                  `json:"project_ids"`
+	RouteIDs             []string                  `json:"route_ids"`
+	RouteID              *string                   `json:"route_id"`
+	Name                 string                    `json:"name"`
+	URL                  string                    `json:"url"`
+	Events               []string                  `json:"events"`
+	Enabled              bool                      `json:"enabled"`
+	IncludeMachineEvents bool                      `json:"include_machine_events"`
+	Secret               string                    `json:"secret"`
+	LastCalledAt         *string                   `json:"last_called_at"`
+	CreatedAt            string                    `json:"created_at"`
+	UpdatedAt            string                    `json:"updated_at"`
+	DeliveryModeFilter   WebhookDeliveryModeFilter `json:"delivery_mode_filter"`
+}
+
+type DeliveryMode string
+
+const (
+	DeliveryModeLive    DeliveryMode = "live"
+	DeliveryModeSandbox DeliveryMode = "sandbox"
+)
+
+type WebhookDeliveryModeFilter string
+
+const (
+	WebhookDeliveryModeFilterLive    WebhookDeliveryModeFilter = "live"
+	WebhookDeliveryModeFilterSandbox WebhookDeliveryModeFilter = "sandbox"
+	WebhookDeliveryModeFilterBoth    WebhookDeliveryModeFilter = "both"
+)
+
 type SendMailResponse struct {
-	MessageID   *string       `json:"message_id"`
-	Status      MessageStatus `json:"status"`
-	ScheduledAt *string       `json:"scheduled_at,omitempty"`
+	MessageID     *string        `json:"message_id"`
+	Status        MessageStatus  `json:"status"`
+	ScheduledAt   *string        `json:"scheduled_at,omitempty"`
+	Sandbox       *bool          `json:"sandbox,omitempty"`
+	SandboxResult *SandboxResult `json:"sandbox_result,omitempty"`
 }
 
 type SendBatchMailResponse []SendMailResponse
@@ -847,13 +933,25 @@ type BlockedFileTypesResponse struct {
 	MimeTypes  []string `json:"mime_types"`
 }
 
+type RescheduleMessageResponse struct {
+	MessageID   string         `json:"message_id"`
+	Status      *MessageStatus `json:"status"`
+	ScheduledAt *string        `json:"scheduled_at"`
+}
+
+type MessageShowResponse MessageData
+
+type CancelScheduledMessageResponse struct {
+	MessageID   string         `json:"message_id"`
+	Status      *MessageStatus `json:"status"`
+	ScheduledAt *string        `json:"scheduled_at"`
+}
+
 type MessageIndexResponse struct {
 	Data  []MessageListData      `json:"data"`
 	Links []string               `json:"links"`
 	Meta  map[string]interface{} `json:"meta"`
 }
-
-type MessageShowResponse MessageData
 
 type MessageEventsResponse struct {
 	Data  []MessageEventData     `json:"data"`
@@ -1006,8 +1104,8 @@ type WebhookIndexResponse struct {
 type WebhookStoreRequest StoreWebhookData
 
 type WebhookStoreResponse struct {
-	Data    WebhookData `json:"data"`
-	Message string      `json:"message"`
+	Data    WebhookSecretData `json:"data"`
+	Message string            `json:"message"`
 }
 
 type WebhookShowResponse WebhookData
@@ -1029,8 +1127,8 @@ type WebhookTestResponse struct {
 }
 
 type WebhookRegenerateSecretResponse struct {
-	Data    WebhookData `json:"data"`
-	Message string      `json:"message"`
+	Data    WebhookSecretData `json:"data"`
+	Message string            `json:"message"`
 }
 
 type WebhookDeliveriesResponse struct {
