@@ -733,7 +733,7 @@ type UpdateRouteSettingsData struct {
 }
 
 type UpdateTeamData struct {
-	Name string `json:"name,omitempty"`
+	Name *string `json:"name,omitempty"`
 }
 
 type UpdateTeamMemberAssignmentData struct {
@@ -1061,7 +1061,7 @@ type StatsIndexResponse StatsData
 
 type SuppressionIndexResponse struct {
 	Data        []SuppressedRecipientData `json:"data"`
-	Path        string                    `json:"path"`
+	Path        *string                   `json:"path"`
 	PerPage     int                       `json:"per_page"`
 	NextCursor  *string                   `json:"next_cursor"`
 	NextPageURL *string                   `json:"next_page_url"`

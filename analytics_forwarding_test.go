@@ -81,6 +81,16 @@ func TestAnalyticsAndReportForwarding(t *testing.T) {
 }
 
 func TestUpdatedResponseFields(t *testing.T) {
+	name := "Team name"
+	request := UpdateTeamData{Name: &name}
+	encoded, err := json.Marshal(request)
+	if err != nil || string(encoded) != `{"name":"Team name"}` {
+		t.Fatalf("%s %v", encoded, err)
+	}
+	var page SuppressionIndexResponse
+	if err := json.Unmarshal([]byte(`{"data":[],"path":"/suppressions","per_page":1}`), &page); err != nil || page.Path == nil || *page.Path != "/suppressions" {
+		t.Fatalf("%+v %v", page, err)
+	}
 	var created ProjectStoreResponse
 	if err := json.Unmarshal([]byte(`{"data":{},"message":"Created","api_token":"project-token"}`), &created); err != nil || created.APIToken != "project-token" {
 		t.Fatalf("%+v %v", created, err)
