@@ -42,6 +42,12 @@ func (api *APIClient) Ping(ctx context.Context) (string, error) {
 	return rawPing(api.client.doRaw(ctx, http.MethodGet, "/ping", nil))
 }
 
+func (api *APIClient) Analytics(ctx context.Context, payload AnalyticsRequest) (AnalyticsResponse, error) {
+	var out AnalyticsResponse
+	err := api.client.doJSON(ctx, http.MethodPost, "/analytics", nil, payload, &out)
+	return out, err
+}
+
 func (api *APIClient) BlockedFileTypes(ctx context.Context) (BlockedFileTypesResponse, error) {
 	var out BlockedFileTypesResponse
 	err := api.client.doJSON(ctx, http.MethodGet, "/blocked-file-types", nil, nil, &out)
@@ -74,6 +80,34 @@ type StatsService struct{ client *Client }
 type SuppressionsService struct{ client *Client }
 type TeamService struct{ client *Client }
 type WebhooksService struct{ client *Client }
+
+func (s *ProjectsService) RetrieveReportForwarding(ctx context.Context, projectID string) (GetReportForwardingResponse, error) {
+	var out GetReportForwardingResponse
+	err := s.client.doJSON(ctx, http.MethodGet, "/projects/"+segment(projectID)+"/report-forwarding", nil, nil, &out)
+	return out, err
+}
+
+func (s *ProjectsService) UpdateReportForwarding(ctx context.Context, projectID string, payload UpdateReportForwardingRequest) (UpdateReportForwardingResponse, error) {
+	var out UpdateReportForwardingResponse
+	err := s.client.doJSON(ctx, http.MethodPut, "/projects/"+segment(projectID)+"/report-forwarding", nil, payload, &out)
+	return out, err
+}
+
+func (s *ProjectsService) DeleteReportForwarding(ctx context.Context, projectID string) error {
+	return s.client.doJSON(ctx, http.MethodDelete, "/projects/"+segment(projectID)+"/report-forwarding", nil, nil, nil)
+}
+
+func (s *ProjectsService) VerifyReportForwarding(ctx context.Context, projectID string, payload VerifyReportForwardingRequest) (VerifyReportForwardingResponse, error) {
+	var out VerifyReportForwardingResponse
+	err := s.client.doJSON(ctx, http.MethodPost, "/projects/"+segment(projectID)+"/report-forwarding/verify", nil, payload, &out)
+	return out, err
+}
+
+func (s *ProjectsService) ResendReportForwardingCode(ctx context.Context, projectID string) (ResendReportForwardingCodeResponse, error) {
+	var out ResendReportForwardingCodeResponse
+	err := s.client.doJSON(ctx, http.MethodPost, "/projects/"+segment(projectID)+"/report-forwarding/resend-code", nil, nil, &out)
+	return out, err
+}
 
 func (s *DomainsService) List(ctx context.Context, query map[string]string) (DomainIndexResponse, error) {
 	var out DomainIndexResponse
