@@ -99,7 +99,7 @@ func TestMessageScheduleEndpoints(t *testing.T) {
 		default:
 			t.Fatalf("unexpected path %s", r.URL.Path)
 		}
-		_ = json.NewEncoder(w).Encode(MessageScheduleResponse{MessageID: "message/id"})
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{"message_id": "message/id"})
 	}))
 	defer server.Close()
 
@@ -330,7 +330,7 @@ func TestAPITypesMatchCurrentTeamSchema(t *testing.T) {
 	projectUpdate := UpdateProjectData{RedactEmailContent: &redact}
 	project := ProjectData{RedactEmailContent: true}
 	projectCreate := StoreProjectData{Name: "Production", ShortToken: &redact}
-	suppression := StoreSuppressionData{Reason: SuppressionReasonManual, Scope: SuppressionScopeGlobal}
+	suppression := StoreSuppressionData{Reason: SuppressionReasonManual, Scope: SuppressionScopeTeam}
 	blockedFileTypes := BlockedFileTypesResponse{
 		Extensions: []string{"exe"},
 		MimeTypes:  []string{"application/x-msdownload"},
@@ -350,7 +350,7 @@ func TestAPITypesMatchCurrentTeamSchema(t *testing.T) {
 		projectUpdate.RedactEmailContent == nil ||
 		projectCreate.ShortToken == nil ||
 		!project.RedactEmailContent ||
-		suppression.Scope != SuppressionScopeGlobal ||
+		suppression.Scope != SuppressionScopeTeam ||
 		blockedFileTypes.MimeTypes[0] != "application/x-msdownload" ||
 		team.IncludedVolume != 300000 ||
 		!role.Assignable ||
@@ -388,6 +388,9 @@ func TestAPIExposesDocumentedOperations(t *testing.T) {
 		"message.source":                 api.Messages.Source,
 		"message.html":                   api.Messages.HTML,
 		"message.text":                   api.Messages.Text,
+		"rescheduleMessage":              api.Messages.Reschedule,
+		"cancelScheduledMessage":         api.Messages.Cancel,
+		"processInboundMessage":          api.Messages.Process,
 		"project.index":                  api.Projects.List,
 		"project.store":                  api.Projects.Create,
 		"project.show":                   api.Projects.Retrieve,
@@ -426,6 +429,47 @@ func TestAPIExposesDocumentedOperations(t *testing.T) {
 		if method == nil || reflect.ValueOf(method).Kind() != reflect.Func {
 			t.Fatalf("missing SDK method for operation %s", operationID)
 		}
+	}
+}
+
+func TestSendMailResponseMatchesSandboxContract(t *testing.T) {
+	payload := []byte(`{"message_id":null,"status":"delivered","sandbox":true,"sandbox_result":"clicked"}`)
+	var response SendMailResponse
+	if err := json.Unmarshal(payload, &response); err != nil {
+		t.Fatalf("json.Unmarshal() error = %v", err)
+	}
+	if response.MessageID != nil {
+		t.Fatalf("MessageID = %q, want nil", *response.MessageID)
+	}
+	if response.Sandbox == nil || !*response.Sandbox {
+		t.Fatalf("Sandbox = %v, want true", response.Sandbox)
+	}
+	if response.SandboxResult == nil || *response.SandboxResult != SandboxResultClicked {
+		t.Fatalf("SandboxResult = %v, want clicked", response.SandboxResult)
+	}
+
+	encoded, err := json.Marshal(response)
+	if err != nil {
+		t.Fatalf("json.Marshal() error = %v", err)
+	}
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(encoded, &fields); err != nil {
+		t.Fatalf("json.Unmarshal(encoded) error = %v", err)
+	}
+	if _, ok := fields["delivery_mode"]; ok {
+		t.Fatal("sending response must not expose delivery_mode")
+	}
+}
+
+func TestCompatibilityTypesRemainAvailable(t *testing.T) {
+	var scheduled MessageScheduleResponse = CancelScheduledMessageResponse{MessageID: "message-id"}
+	cursor := CursorPaginator{Data: []string{}, PerPage: 25}
+
+	if scheduled.MessageID != "message-id" {
+		t.Fatalf("MessageID = %q, want message-id", scheduled.MessageID)
+	}
+	if cursor.PerPage != 25 {
+		t.Fatalf("PerPage = %d, want 25", cursor.PerPage)
 	}
 }
 
