@@ -415,6 +415,7 @@ type RouteData struct {
 	IsDefault                 bool                   `json:"is_default"`
 	InboundAddress            *string                `json:"inbound_address,omitempty"`
 	InboundMxHostname         string                 `json:"inbound_mx_hostname,omitempty"`
+	InboundRouteDomain        *string                `json:"inbound_route_domain,omitempty"`
 	InboundDomain             *string                `json:"inbound_domain,omitempty"`
 	InboundDomainVerifiedAt   *string                `json:"inbound_domain_verified_at,omitempty"`
 	InboundSpamThreshold      *float64               `json:"inbound_spam_threshold,omitempty"`

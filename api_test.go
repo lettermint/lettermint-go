@@ -433,13 +433,13 @@ func TestAPIExposesDocumentedOperations(t *testing.T) {
 }
 
 func TestSendMailResponseMatchesSandboxContract(t *testing.T) {
-	payload := []byte(`{"message_id":null,"status":"delivered","sandbox":true,"sandbox_result":"clicked"}`)
+	payload := []byte(`{"message_id":"message_1","status":"pending","sandbox":true,"sandbox_result":"clicked"}`)
 	var response SendMailResponse
 	if err := json.Unmarshal(payload, &response); err != nil {
 		t.Fatalf("json.Unmarshal() error = %v", err)
 	}
-	if response.MessageID != nil {
-		t.Fatalf("MessageID = %q, want nil", *response.MessageID)
+	if response.MessageID == nil || *response.MessageID != "message_1" {
+		t.Fatalf("MessageID = %v, want message_1", response.MessageID)
 	}
 	if response.Sandbox == nil || !*response.Sandbox {
 		t.Fatalf("Sandbox = %v, want true", response.Sandbox)
