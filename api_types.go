@@ -329,6 +329,7 @@ type ProjectData struct {
 type ProjectListData struct {
 	ID           string           `json:"id"`
 	Name         string           `json:"name"`
+	DeliveryMode DeliveryMode     `json:"delivery_mode"`
 	SMTPEnabled  bool             `json:"smtp_enabled"`
 	RoutesCount  int              `json:"routes_count"`
 	DomainsCount int              `json:"domains_count"`
@@ -384,6 +385,7 @@ const (
 	RbacPermissionWebhooksDelete         RbacPermission = "webhooks:delete"
 	RbacPermissionWebhooksRotateSecret   RbacPermission = "webhooks:rotate_secret"
 	RbacPermissionStatsRead              RbacPermission = "stats:read"
+	RbacPermissionAnalyticsRead          RbacPermission = "analytics:read"
 	RbacPermissionMessagesRead           RbacPermission = "messages:read"
 	RbacPermissionMessagesReadContent    RbacPermission = "messages:read_content"
 	RbacPermissionMessagesSend           RbacPermission = "messages:send"
@@ -536,17 +538,23 @@ type StoreDomainData struct {
 }
 
 type StoreProjectData struct {
-	Name          string        `json:"name"`
-	SMTPEnabled   *bool         `json:"smtp_enabled,omitempty"`
-	InitialRoutes InitialRoutes `json:"initial_routes,omitempty"`
-	ShortToken    *bool         `json:"short_token,omitempty"`
-	DeliveryMode  DeliveryMode  `json:"delivery_mode,omitempty"`
+	Name               string        `json:"name"`
+	SMTPEnabled        *bool         `json:"smtp_enabled,omitempty"`
+	DeliveryMode       DeliveryMode  `json:"delivery_mode,omitempty"`
+	InitialRoutes      InitialRoutes `json:"initial_routes,omitempty"`
+	ShortToken         *bool         `json:"short_token,omitempty"`
+	RedactEmailContent *bool         `json:"redact_email_content,omitempty"`
 }
 
 type StoreRouteData struct {
-	Name      string    `json:"name"`
-	RouteType RouteType `json:"route_type"`
-	Slug      *string   `json:"slug,omitempty"`
+	Name                 string                          `json:"name"`
+	RouteType            RouteType                       `json:"route_type"`
+	Slug                 *string                         `json:"slug,omitempty"`
+	Settings             *UpdateRouteSettingsData        `json:"settings,omitempty"`
+	InboundSettings      *UpdateRouteInboundSettingsData `json:"inbound_settings,omitempty"`
+	InboundDomain        *string                         `json:"inbound_domain,omitempty"`
+	InboundSpamThreshold *float64                        `json:"inbound_spam_threshold,omitempty"`
+	AttachmentDelivery   *AttachmentDelivery             `json:"attachment_delivery,omitempty"`
 }
 
 type StoreSuppressionData struct {
@@ -699,9 +707,12 @@ type UpdateProjectData struct {
 }
 
 type UpdateRouteData struct {
-	Name            *string                         `json:"name,omitempty"`
-	Settings        *UpdateRouteSettingsData        `json:"settings,omitempty"`
-	InboundSettings *UpdateRouteInboundSettingsData `json:"inbound_settings,omitempty"`
+	Name                 *string                         `json:"name,omitempty"`
+	Settings             *UpdateRouteSettingsData        `json:"settings,omitempty"`
+	InboundSettings      *UpdateRouteInboundSettingsData `json:"inbound_settings,omitempty"`
+	InboundDomain        *string                         `json:"inbound_domain,omitempty"`
+	InboundSpamThreshold *float64                        `json:"inbound_spam_threshold,omitempty"`
+	AttachmentDelivery   *AttachmentDelivery             `json:"attachment_delivery,omitempty"`
 }
 
 type UpdateRouteInboundSettingsData struct {
@@ -788,6 +799,7 @@ type WebhookDeliveryListData struct {
 	SourceProjectID *string               `json:"source_project_id"`
 	SourceRouteID   *string               `json:"source_route_id"`
 	Status          WebhookDeliveryStatus `json:"status"`
+	Sandbox         bool                  `json:"sandbox"`
 	AttemptNumber   int                   `json:"attempt_number"`
 	HttpStatusCode  *int                  `json:"http_status_code"`
 	DurationMs      *int                  `json:"duration_ms"`
@@ -833,18 +845,19 @@ const (
 )
 
 type WebhookListData struct {
-	ID           string       `json:"id"`
-	Scope        WebhookScope `json:"scope"`
-	ProjectIDs   []string     `json:"project_ids"`
-	RouteIDs     []string     `json:"route_ids"`
-	RouteID      *string      `json:"route_id"`
-	Name         string       `json:"name"`
-	URL          string       `json:"url"`
-	Events       []string     `json:"events"`
-	Enabled      bool         `json:"enabled"`
-	LastCalledAt *string      `json:"last_called_at"`
-	CreatedAt    string       `json:"created_at"`
-	UpdatedAt    string       `json:"updated_at"`
+	ID                 string                    `json:"id"`
+	Scope              WebhookScope              `json:"scope"`
+	ProjectIDs         []string                  `json:"project_ids"`
+	RouteIDs           []string                  `json:"route_ids"`
+	RouteID            *string                   `json:"route_id"`
+	Name               string                    `json:"name"`
+	URL                string                    `json:"url"`
+	Events             []string                  `json:"events"`
+	Enabled            bool                      `json:"enabled"`
+	DeliveryModeFilter WebhookDeliveryModeFilter `json:"delivery_mode_filter"`
+	LastCalledAt       *string                   `json:"last_called_at"`
+	CreatedAt          string                    `json:"created_at"`
+	UpdatedAt          string                    `json:"updated_at"`
 }
 
 type WebhookScope string
@@ -901,7 +914,7 @@ type EmailPayload = SendMailRequest
 type SendEmailResponse = SendMailResponse
 type SendBatchEmailResponse = SendBatchMailResponse
 
-type PingResponse int
+type PingResponse string
 
 type DomainIndexResponse struct {
 	Data        []DomainListData `json:"data"`
@@ -988,7 +1001,7 @@ type ProjectStoreRequest StoreProjectData
 type ProjectStoreResponse struct {
 	Data     ProjectData `json:"data"`
 	Message  string      `json:"message"`
-	APIToken string      `json:"api_token"`
+	APIToken string      `json:"api_token,omitempty"`
 }
 
 type ProjectShowResponse ProjectData
@@ -1064,10 +1077,11 @@ type SuppressionStoreResponse struct {
 }
 
 type SuppressionDestroyResponse struct {
-	Success    bool    `json:"success"`
-	Status     string  `json:"status"`
-	Message    string  `json:"message"`
-	Confidence float64 `json:"confidence,omitempty"`
+	Success          bool    `json:"success"`
+	Status           string  `json:"status"`
+	Message          string  `json:"message"`
+	Confidence       float64 `json:"confidence,omitempty"`
+	TicketIdentifier string  `json:"ticket_identifier,omitempty"`
 }
 
 type TeamShowResponse TeamData
@@ -1152,3 +1166,1096 @@ type WebhookDeliveriesResponse struct {
 }
 
 type WebhookShowDeliveryResponse WebhookDeliveryData
+
+type ProjectCreatedData struct {
+	Data     ProjectData `json:"data"`
+	Message  string      `json:"message"`
+	APIToken string      `json:"api_token,omitempty"`
+}
+
+type ReportForwardingRequest struct {
+	Destination string `json:"destination"`
+}
+
+type ReportForwardingResource struct {
+	Destination *string `json:"destination"`
+	Verified    bool    `json:"verified"`
+	VerifiedAt  *string `json:"verified_at"`
+}
+
+type VerifyReportForwardingRequest struct {
+	Code string `json:"code"`
+}
+
+type UpdateReportForwardingRequest ReportForwardingRequest
+
+type GetReportForwardingResponse struct {
+	Data ReportForwardingResource `json:"data"`
+}
+
+type UpdateReportForwardingResponse struct {
+	Data ReportForwardingResource `json:"data"`
+}
+
+type VerifyReportForwardingResponse struct {
+	Data ReportForwardingResource `json:"data"`
+}
+
+type ResendReportForwardingCodeResponse struct {
+	Data ReportForwardingResource `json:"data"`
+}
+
+type AnalyticsResponseData struct {
+	Data       map[string]interface{} `json:"data"`
+	Meta       map[string]interface{} `json:"meta"`
+	Pagination []string               `json:"pagination"`
+}
+
+type AnalyticsRequestFiltersItem struct {
+	Dimension string   `json:"dimension"`
+	Operator  string   `json:"operator"`
+	Values    []string `json:"values,omitempty"`
+}
+
+type AnalyticsRequestSort struct {
+	Metric    string `json:"metric"`
+	Direction string `json:"direction"`
+}
+
+type AnalyticsRequest struct {
+	Metrics      []string                      `json:"metrics"`
+	From         string                        `json:"from,omitempty"`
+	To           string                        `json:"to,omitempty"`
+	Timezone     string                        `json:"timezone,omitempty"`
+	Include      []string                      `json:"include,omitempty"`
+	GroupBy      []string                      `json:"group_by,omitempty"`
+	Filters      []AnalyticsRequestFiltersItem `json:"filters,omitempty"`
+	Interval     string                        `json:"interval,omitempty"`
+	Compare      string                        `json:"compare,omitempty"`
+	IncludeTrend *bool                         `json:"include_trend,omitempty"`
+	Sort         AnalyticsRequestSort          `json:"sort,omitempty"`
+	Limit        int                           `json:"limit,omitempty"`
+	Cursor       string                        `json:"cursor,omitempty"`
+}
+
+type AnalyticsResponseMetaComparison struct {
+	From    string `json:"from"`
+	To      string `json:"to"`
+	Partial bool   `json:"partial"`
+}
+
+type AnalyticsResponseMeta struct {
+	TimeBasis               string                          `json:"time_basis,omitempty"`
+	Timezone                string                          `json:"timezone,omitempty"`
+	Interval                string                          `json:"interval,omitempty"`
+	From                    string                          `json:"from,omitempty"`
+	To                      string                          `json:"to,omitempty"`
+	EffectiveTo             string                          `json:"effective_to,omitempty"`
+	Alignment               string                          `json:"alignment,omitempty"`
+	GeneratedAt             string                          `json:"generated_at,omitempty"`
+	AvailableSince          string                          `json:"available_since,omitempty"`
+	Partial                 *bool                           `json:"partial,omitempty"`
+	Ongoing                 *bool                           `json:"ongoing,omitempty"`
+	CollectionCompleteness  string                          `json:"collection_completeness,omitempty"`
+	LastIngestedAt          *string                         `json:"last_ingested_at,omitempty"`
+	MetricDefinitionVersion string                          `json:"metric_definition_version,omitempty"`
+	RankedGroupLimit        int                             `json:"ranked_group_limit,omitempty"`
+	Comparison              AnalyticsResponseMetaComparison `json:"comparison,omitempty"`
+}
+
+type AnalyticsResponsePagination struct {
+	TotalGroups    int     `json:"total_groups"`
+	ReturnedGroups int     `json:"returned_groups"`
+	NextCursor     *string `json:"next_cursor"`
+	Truncated      bool    `json:"truncated"`
+}
+
+type AnalyticsResponse struct {
+	Data       AnalyticsResponsePayload    `json:"data"`
+	Meta       AnalyticsResponseMeta       `json:"meta"`
+	Pagination AnalyticsResponsePagination `json:"pagination"`
+}
+
+type AnalyticsResponsePayloadSummaryMetrics struct {
+	Accepted                   *int     `json:"accepted,omitempty"`
+	Processed                  *int     `json:"processed,omitempty"`
+	Suppressed                 *int     `json:"suppressed,omitempty"`
+	PolicyRejected             *int     `json:"policy_rejected,omitempty"`
+	ApplicationFailed          *int     `json:"application_failed,omitempty"`
+	MtaAccepted                *int     `json:"mta_accepted,omitempty"`
+	Canceled                   *int     `json:"canceled,omitempty"`
+	Messages                   *int     `json:"messages,omitempty"`
+	Delivered                  *int     `json:"delivered,omitempty"`
+	Bounced                    *int     `json:"bounced,omitempty"`
+	SoftBounced                *int     `json:"soft_bounced,omitempty"`
+	AdministrativelyBounced    *int     `json:"administratively_bounced,omitempty"`
+	DeferredRecipients         *int     `json:"deferred_recipients,omitempty"`
+	DeferredEvents             *int     `json:"deferred_events,omitempty"`
+	DeliveryAttempts           *int     `json:"delivery_attempts,omitempty"`
+	AttemptedRecipients        *int     `json:"attempted_recipients,omitempty"`
+	TransportOutcomeRecipients *int     `json:"transport_outcome_recipients,omitempty"`
+	EffectiveDelivered         *int     `json:"effective_delivered,omitempty"`
+	OpenTrackedDelivered       *int     `json:"open_tracked_delivered,omitempty"`
+	ClickTrackedDelivered      *int     `json:"click_tracked_delivered,omitempty"`
+	OutOfBandBouncedRecipients *int     `json:"out_of_band_bounced_recipients,omitempty"`
+	OutOfBandBounceEvents      *int     `json:"out_of_band_bounce_events,omitempty"`
+	Complained                 *int     `json:"complained,omitempty"`
+	Unsubscribed               *int     `json:"unsubscribed,omitempty"`
+	HumanOpens                 *int     `json:"human_opens,omitempty"`
+	HumanOpensEvents           *int     `json:"human_opens_events,omitempty"`
+	HumanClicks                *int     `json:"human_clicks,omitempty"`
+	HumanClicksEvents          *int     `json:"human_clicks_events,omitempty"`
+	MachineOpens               *int     `json:"machine_opens,omitempty"`
+	MachineOpensEvents         *int     `json:"machine_opens_events,omitempty"`
+	MachineClicks              *int     `json:"machine_clicks,omitempty"`
+	MachineClicksEvents        *int     `json:"machine_clicks_events,omitempty"`
+	PrivacyOpens               *int     `json:"privacy_opens,omitempty"`
+	PrivacyOpensEvents         *int     `json:"privacy_opens_events,omitempty"`
+	PrivacyClicks              *int     `json:"privacy_clicks,omitempty"`
+	PrivacyClicksEvents        *int     `json:"privacy_clicks_events,omitempty"`
+	BotOpens                   *int     `json:"bot_opens,omitempty"`
+	BotOpensEvents             *int     `json:"bot_opens_events,omitempty"`
+	BotClicks                  *int     `json:"bot_clicks,omitempty"`
+	BotClicksEvents            *int     `json:"bot_clicks_events,omitempty"`
+	ScannerOpens               *int     `json:"scanner_opens,omitempty"`
+	ScannerOpensEvents         *int     `json:"scanner_opens_events,omitempty"`
+	ScannerClicks              *int     `json:"scanner_clicks,omitempty"`
+	ScannerClicksEvents        *int     `json:"scanner_clicks_events,omitempty"`
+	ObservedOpens              *int     `json:"observed_opens,omitempty"`
+	ObservedOpensEvents        *int     `json:"observed_opens_events,omitempty"`
+	ObservedClicks             *int     `json:"observed_clicks,omitempty"`
+	ObservedClicksEvents       *int     `json:"observed_clicks_events,omitempty"`
+	DeliveryRate               *float64 `json:"delivery_rate,omitempty"`
+	EffectiveDeliveryRate      *float64 `json:"effective_delivery_rate,omitempty"`
+	BounceRate                 *float64 `json:"bounce_rate,omitempty"`
+	DeferralRate               *float64 `json:"deferral_rate,omitempty"`
+	ComplaintRate              *float64 `json:"complaint_rate,omitempty"`
+	HumanOpenRate              *float64 `json:"human_open_rate,omitempty"`
+	HumanClickRate             *float64 `json:"human_click_rate,omitempty"`
+	ProcessingLatencyP50Ms     *float64 `json:"processing_latency_p50_ms,omitempty"`
+	ProcessingLatencyP95Ms     *float64 `json:"processing_latency_p95_ms,omitempty"`
+	ProcessingLatencyP99Ms     *float64 `json:"processing_latency_p99_ms,omitempty"`
+	ProcessingLatencySamples   *int     `json:"processing_latency_samples,omitempty"`
+	DeliveryLatencyP50Ms       *float64 `json:"delivery_latency_p50_ms,omitempty"`
+	DeliveryLatencyP95Ms       *float64 `json:"delivery_latency_p95_ms,omitempty"`
+	DeliveryLatencyP99Ms       *float64 `json:"delivery_latency_p99_ms,omitempty"`
+	DeliveryLatencySamples     *int     `json:"delivery_latency_samples,omitempty"`
+	TotalLatencyP50Ms          *float64 `json:"total_latency_p50_ms,omitempty"`
+	TotalLatencyP95Ms          *float64 `json:"total_latency_p95_ms,omitempty"`
+	TotalLatencyP99Ms          *float64 `json:"total_latency_p99_ms,omitempty"`
+	TotalLatencySamples        *int     `json:"total_latency_samples,omitempty"`
+}
+
+type AnalyticsResponsePayloadSummaryRateBasesDeliveryRate struct {
+	Numerator   *int `json:"numerator"`
+	Denominator *int `json:"denominator"`
+}
+
+type AnalyticsResponsePayloadSummaryRateBasesEffectiveDeliveryRate struct {
+	Numerator   *int `json:"numerator"`
+	Denominator *int `json:"denominator"`
+}
+
+type AnalyticsResponsePayloadSummaryRateBasesBounceRate struct {
+	Numerator   *int `json:"numerator"`
+	Denominator *int `json:"denominator"`
+}
+
+type AnalyticsResponsePayloadSummaryRateBasesDeferralRate struct {
+	Numerator   *int `json:"numerator"`
+	Denominator *int `json:"denominator"`
+}
+
+type AnalyticsResponsePayloadSummaryRateBasesComplaintRate struct {
+	Numerator   *int `json:"numerator"`
+	Denominator *int `json:"denominator"`
+}
+
+type AnalyticsResponsePayloadSummaryRateBasesHumanOpenRate struct {
+	Numerator   *int `json:"numerator"`
+	Denominator *int `json:"denominator"`
+}
+
+type AnalyticsResponsePayloadSummaryRateBasesHumanClickRate struct {
+	Numerator   *int `json:"numerator"`
+	Denominator *int `json:"denominator"`
+}
+
+type AnalyticsResponsePayloadSummaryRateBases struct {
+	DeliveryRate          AnalyticsResponsePayloadSummaryRateBasesDeliveryRate          `json:"delivery_rate,omitempty"`
+	EffectiveDeliveryRate AnalyticsResponsePayloadSummaryRateBasesEffectiveDeliveryRate `json:"effective_delivery_rate,omitempty"`
+	BounceRate            AnalyticsResponsePayloadSummaryRateBasesBounceRate            `json:"bounce_rate,omitempty"`
+	DeferralRate          AnalyticsResponsePayloadSummaryRateBasesDeferralRate          `json:"deferral_rate,omitempty"`
+	ComplaintRate         AnalyticsResponsePayloadSummaryRateBasesComplaintRate         `json:"complaint_rate,omitempty"`
+	HumanOpenRate         AnalyticsResponsePayloadSummaryRateBasesHumanOpenRate         `json:"human_open_rate,omitempty"`
+	HumanClickRate        AnalyticsResponsePayloadSummaryRateBasesHumanClickRate        `json:"human_click_rate,omitempty"`
+}
+
+type AnalyticsResponsePayloadSummaryPreviousMetrics struct {
+	Accepted                   *int     `json:"accepted,omitempty"`
+	Processed                  *int     `json:"processed,omitempty"`
+	Suppressed                 *int     `json:"suppressed,omitempty"`
+	PolicyRejected             *int     `json:"policy_rejected,omitempty"`
+	ApplicationFailed          *int     `json:"application_failed,omitempty"`
+	MtaAccepted                *int     `json:"mta_accepted,omitempty"`
+	Canceled                   *int     `json:"canceled,omitempty"`
+	Messages                   *int     `json:"messages,omitempty"`
+	Delivered                  *int     `json:"delivered,omitempty"`
+	Bounced                    *int     `json:"bounced,omitempty"`
+	SoftBounced                *int     `json:"soft_bounced,omitempty"`
+	AdministrativelyBounced    *int     `json:"administratively_bounced,omitempty"`
+	DeferredRecipients         *int     `json:"deferred_recipients,omitempty"`
+	DeferredEvents             *int     `json:"deferred_events,omitempty"`
+	DeliveryAttempts           *int     `json:"delivery_attempts,omitempty"`
+	AttemptedRecipients        *int     `json:"attempted_recipients,omitempty"`
+	TransportOutcomeRecipients *int     `json:"transport_outcome_recipients,omitempty"`
+	EffectiveDelivered         *int     `json:"effective_delivered,omitempty"`
+	OpenTrackedDelivered       *int     `json:"open_tracked_delivered,omitempty"`
+	ClickTrackedDelivered      *int     `json:"click_tracked_delivered,omitempty"`
+	OutOfBandBouncedRecipients *int     `json:"out_of_band_bounced_recipients,omitempty"`
+	OutOfBandBounceEvents      *int     `json:"out_of_band_bounce_events,omitempty"`
+	Complained                 *int     `json:"complained,omitempty"`
+	Unsubscribed               *int     `json:"unsubscribed,omitempty"`
+	HumanOpens                 *int     `json:"human_opens,omitempty"`
+	HumanOpensEvents           *int     `json:"human_opens_events,omitempty"`
+	HumanClicks                *int     `json:"human_clicks,omitempty"`
+	HumanClicksEvents          *int     `json:"human_clicks_events,omitempty"`
+	MachineOpens               *int     `json:"machine_opens,omitempty"`
+	MachineOpensEvents         *int     `json:"machine_opens_events,omitempty"`
+	MachineClicks              *int     `json:"machine_clicks,omitempty"`
+	MachineClicksEvents        *int     `json:"machine_clicks_events,omitempty"`
+	PrivacyOpens               *int     `json:"privacy_opens,omitempty"`
+	PrivacyOpensEvents         *int     `json:"privacy_opens_events,omitempty"`
+	PrivacyClicks              *int     `json:"privacy_clicks,omitempty"`
+	PrivacyClicksEvents        *int     `json:"privacy_clicks_events,omitempty"`
+	BotOpens                   *int     `json:"bot_opens,omitempty"`
+	BotOpensEvents             *int     `json:"bot_opens_events,omitempty"`
+	BotClicks                  *int     `json:"bot_clicks,omitempty"`
+	BotClicksEvents            *int     `json:"bot_clicks_events,omitempty"`
+	ScannerOpens               *int     `json:"scanner_opens,omitempty"`
+	ScannerOpensEvents         *int     `json:"scanner_opens_events,omitempty"`
+	ScannerClicks              *int     `json:"scanner_clicks,omitempty"`
+	ScannerClicksEvents        *int     `json:"scanner_clicks_events,omitempty"`
+	ObservedOpens              *int     `json:"observed_opens,omitempty"`
+	ObservedOpensEvents        *int     `json:"observed_opens_events,omitempty"`
+	ObservedClicks             *int     `json:"observed_clicks,omitempty"`
+	ObservedClicksEvents       *int     `json:"observed_clicks_events,omitempty"`
+	DeliveryRate               *float64 `json:"delivery_rate,omitempty"`
+	EffectiveDeliveryRate      *float64 `json:"effective_delivery_rate,omitempty"`
+	BounceRate                 *float64 `json:"bounce_rate,omitempty"`
+	DeferralRate               *float64 `json:"deferral_rate,omitempty"`
+	ComplaintRate              *float64 `json:"complaint_rate,omitempty"`
+	HumanOpenRate              *float64 `json:"human_open_rate,omitempty"`
+	HumanClickRate             *float64 `json:"human_click_rate,omitempty"`
+	ProcessingLatencyP50Ms     *float64 `json:"processing_latency_p50_ms,omitempty"`
+	ProcessingLatencyP95Ms     *float64 `json:"processing_latency_p95_ms,omitempty"`
+	ProcessingLatencyP99Ms     *float64 `json:"processing_latency_p99_ms,omitempty"`
+	ProcessingLatencySamples   *int     `json:"processing_latency_samples,omitempty"`
+	DeliveryLatencyP50Ms       *float64 `json:"delivery_latency_p50_ms,omitempty"`
+	DeliveryLatencyP95Ms       *float64 `json:"delivery_latency_p95_ms,omitempty"`
+	DeliveryLatencyP99Ms       *float64 `json:"delivery_latency_p99_ms,omitempty"`
+	DeliveryLatencySamples     *int     `json:"delivery_latency_samples,omitempty"`
+	TotalLatencyP50Ms          *float64 `json:"total_latency_p50_ms,omitempty"`
+	TotalLatencyP95Ms          *float64 `json:"total_latency_p95_ms,omitempty"`
+	TotalLatencyP99Ms          *float64 `json:"total_latency_p99_ms,omitempty"`
+	TotalLatencySamples        *int     `json:"total_latency_samples,omitempty"`
+}
+
+type AnalyticsResponsePayloadSummaryPreviousRateBasesDeliveryRate struct {
+	Numerator   *int `json:"numerator"`
+	Denominator *int `json:"denominator"`
+}
+
+type AnalyticsResponsePayloadSummaryPreviousRateBasesEffectiveDeliveryRate struct {
+	Numerator   *int `json:"numerator"`
+	Denominator *int `json:"denominator"`
+}
+
+type AnalyticsResponsePayloadSummaryPreviousRateBasesBounceRate struct {
+	Numerator   *int `json:"numerator"`
+	Denominator *int `json:"denominator"`
+}
+
+type AnalyticsResponsePayloadSummaryPreviousRateBasesDeferralRate struct {
+	Numerator   *int `json:"numerator"`
+	Denominator *int `json:"denominator"`
+}
+
+type AnalyticsResponsePayloadSummaryPreviousRateBasesComplaintRate struct {
+	Numerator   *int `json:"numerator"`
+	Denominator *int `json:"denominator"`
+}
+
+type AnalyticsResponsePayloadSummaryPreviousRateBasesHumanOpenRate struct {
+	Numerator   *int `json:"numerator"`
+	Denominator *int `json:"denominator"`
+}
+
+type AnalyticsResponsePayloadSummaryPreviousRateBasesHumanClickRate struct {
+	Numerator   *int `json:"numerator"`
+	Denominator *int `json:"denominator"`
+}
+
+type AnalyticsResponsePayloadSummaryPreviousRateBases struct {
+	DeliveryRate          AnalyticsResponsePayloadSummaryPreviousRateBasesDeliveryRate          `json:"delivery_rate,omitempty"`
+	EffectiveDeliveryRate AnalyticsResponsePayloadSummaryPreviousRateBasesEffectiveDeliveryRate `json:"effective_delivery_rate,omitempty"`
+	BounceRate            AnalyticsResponsePayloadSummaryPreviousRateBasesBounceRate            `json:"bounce_rate,omitempty"`
+	DeferralRate          AnalyticsResponsePayloadSummaryPreviousRateBasesDeferralRate          `json:"deferral_rate,omitempty"`
+	ComplaintRate         AnalyticsResponsePayloadSummaryPreviousRateBasesComplaintRate         `json:"complaint_rate,omitempty"`
+	HumanOpenRate         AnalyticsResponsePayloadSummaryPreviousRateBasesHumanOpenRate         `json:"human_open_rate,omitempty"`
+	HumanClickRate        AnalyticsResponsePayloadSummaryPreviousRateBasesHumanClickRate        `json:"human_click_rate,omitempty"`
+}
+
+type AnalyticsResponsePayloadSummaryPrevious struct {
+	Metrics   AnalyticsResponsePayloadSummaryPreviousMetrics   `json:"metrics"`
+	RateBases AnalyticsResponsePayloadSummaryPreviousRateBases `json:"rate_bases"`
+}
+
+type AnalyticsResponsePayloadSummary struct {
+	Metrics   AnalyticsResponsePayloadSummaryMetrics   `json:"metrics,omitempty"`
+	RateBases AnalyticsResponsePayloadSummaryRateBases `json:"rate_bases,omitempty"`
+	Previous  AnalyticsResponsePayloadSummaryPrevious  `json:"previous,omitempty"`
+	Change    map[string]map[string]interface{}        `json:"change,omitempty"`
+}
+
+type AnalyticsResponsePayloadTimeSeriesItemMetrics struct {
+	Accepted                   *int     `json:"accepted,omitempty"`
+	Processed                  *int     `json:"processed,omitempty"`
+	Suppressed                 *int     `json:"suppressed,omitempty"`
+	PolicyRejected             *int     `json:"policy_rejected,omitempty"`
+	ApplicationFailed          *int     `json:"application_failed,omitempty"`
+	MtaAccepted                *int     `json:"mta_accepted,omitempty"`
+	Canceled                   *int     `json:"canceled,omitempty"`
+	Messages                   *int     `json:"messages,omitempty"`
+	Delivered                  *int     `json:"delivered,omitempty"`
+	Bounced                    *int     `json:"bounced,omitempty"`
+	SoftBounced                *int     `json:"soft_bounced,omitempty"`
+	AdministrativelyBounced    *int     `json:"administratively_bounced,omitempty"`
+	DeferredRecipients         *int     `json:"deferred_recipients,omitempty"`
+	DeferredEvents             *int     `json:"deferred_events,omitempty"`
+	DeliveryAttempts           *int     `json:"delivery_attempts,omitempty"`
+	AttemptedRecipients        *int     `json:"attempted_recipients,omitempty"`
+	TransportOutcomeRecipients *int     `json:"transport_outcome_recipients,omitempty"`
+	EffectiveDelivered         *int     `json:"effective_delivered,omitempty"`
+	OpenTrackedDelivered       *int     `json:"open_tracked_delivered,omitempty"`
+	ClickTrackedDelivered      *int     `json:"click_tracked_delivered,omitempty"`
+	OutOfBandBouncedRecipients *int     `json:"out_of_band_bounced_recipients,omitempty"`
+	OutOfBandBounceEvents      *int     `json:"out_of_band_bounce_events,omitempty"`
+	Complained                 *int     `json:"complained,omitempty"`
+	Unsubscribed               *int     `json:"unsubscribed,omitempty"`
+	HumanOpens                 *int     `json:"human_opens,omitempty"`
+	HumanOpensEvents           *int     `json:"human_opens_events,omitempty"`
+	HumanClicks                *int     `json:"human_clicks,omitempty"`
+	HumanClicksEvents          *int     `json:"human_clicks_events,omitempty"`
+	MachineOpens               *int     `json:"machine_opens,omitempty"`
+	MachineOpensEvents         *int     `json:"machine_opens_events,omitempty"`
+	MachineClicks              *int     `json:"machine_clicks,omitempty"`
+	MachineClicksEvents        *int     `json:"machine_clicks_events,omitempty"`
+	PrivacyOpens               *int     `json:"privacy_opens,omitempty"`
+	PrivacyOpensEvents         *int     `json:"privacy_opens_events,omitempty"`
+	PrivacyClicks              *int     `json:"privacy_clicks,omitempty"`
+	PrivacyClicksEvents        *int     `json:"privacy_clicks_events,omitempty"`
+	BotOpens                   *int     `json:"bot_opens,omitempty"`
+	BotOpensEvents             *int     `json:"bot_opens_events,omitempty"`
+	BotClicks                  *int     `json:"bot_clicks,omitempty"`
+	BotClicksEvents            *int     `json:"bot_clicks_events,omitempty"`
+	ScannerOpens               *int     `json:"scanner_opens,omitempty"`
+	ScannerOpensEvents         *int     `json:"scanner_opens_events,omitempty"`
+	ScannerClicks              *int     `json:"scanner_clicks,omitempty"`
+	ScannerClicksEvents        *int     `json:"scanner_clicks_events,omitempty"`
+	ObservedOpens              *int     `json:"observed_opens,omitempty"`
+	ObservedOpensEvents        *int     `json:"observed_opens_events,omitempty"`
+	ObservedClicks             *int     `json:"observed_clicks,omitempty"`
+	ObservedClicksEvents       *int     `json:"observed_clicks_events,omitempty"`
+	DeliveryRate               *float64 `json:"delivery_rate,omitempty"`
+	EffectiveDeliveryRate      *float64 `json:"effective_delivery_rate,omitempty"`
+	BounceRate                 *float64 `json:"bounce_rate,omitempty"`
+	DeferralRate               *float64 `json:"deferral_rate,omitempty"`
+	ComplaintRate              *float64 `json:"complaint_rate,omitempty"`
+	HumanOpenRate              *float64 `json:"human_open_rate,omitempty"`
+	HumanClickRate             *float64 `json:"human_click_rate,omitempty"`
+	ProcessingLatencyP50Ms     *float64 `json:"processing_latency_p50_ms,omitempty"`
+	ProcessingLatencyP95Ms     *float64 `json:"processing_latency_p95_ms,omitempty"`
+	ProcessingLatencyP99Ms     *float64 `json:"processing_latency_p99_ms,omitempty"`
+	ProcessingLatencySamples   *int     `json:"processing_latency_samples,omitempty"`
+	DeliveryLatencyP50Ms       *float64 `json:"delivery_latency_p50_ms,omitempty"`
+	DeliveryLatencyP95Ms       *float64 `json:"delivery_latency_p95_ms,omitempty"`
+	DeliveryLatencyP99Ms       *float64 `json:"delivery_latency_p99_ms,omitempty"`
+	DeliveryLatencySamples     *int     `json:"delivery_latency_samples,omitempty"`
+	TotalLatencyP50Ms          *float64 `json:"total_latency_p50_ms,omitempty"`
+	TotalLatencyP95Ms          *float64 `json:"total_latency_p95_ms,omitempty"`
+	TotalLatencyP99Ms          *float64 `json:"total_latency_p99_ms,omitempty"`
+	TotalLatencySamples        *int     `json:"total_latency_samples,omitempty"`
+}
+
+type AnalyticsResponsePayloadTimeSeriesItemRateBasesDeliveryRate struct {
+	Numerator   *int `json:"numerator"`
+	Denominator *int `json:"denominator"`
+}
+
+type AnalyticsResponsePayloadTimeSeriesItemRateBasesEffectiveDeliveryRate struct {
+	Numerator   *int `json:"numerator"`
+	Denominator *int `json:"denominator"`
+}
+
+type AnalyticsResponsePayloadTimeSeriesItemRateBasesBounceRate struct {
+	Numerator   *int `json:"numerator"`
+	Denominator *int `json:"denominator"`
+}
+
+type AnalyticsResponsePayloadTimeSeriesItemRateBasesDeferralRate struct {
+	Numerator   *int `json:"numerator"`
+	Denominator *int `json:"denominator"`
+}
+
+type AnalyticsResponsePayloadTimeSeriesItemRateBasesComplaintRate struct {
+	Numerator   *int `json:"numerator"`
+	Denominator *int `json:"denominator"`
+}
+
+type AnalyticsResponsePayloadTimeSeriesItemRateBasesHumanOpenRate struct {
+	Numerator   *int `json:"numerator"`
+	Denominator *int `json:"denominator"`
+}
+
+type AnalyticsResponsePayloadTimeSeriesItemRateBasesHumanClickRate struct {
+	Numerator   *int `json:"numerator"`
+	Denominator *int `json:"denominator"`
+}
+
+type AnalyticsResponsePayloadTimeSeriesItemRateBases struct {
+	DeliveryRate          AnalyticsResponsePayloadTimeSeriesItemRateBasesDeliveryRate          `json:"delivery_rate,omitempty"`
+	EffectiveDeliveryRate AnalyticsResponsePayloadTimeSeriesItemRateBasesEffectiveDeliveryRate `json:"effective_delivery_rate,omitempty"`
+	BounceRate            AnalyticsResponsePayloadTimeSeriesItemRateBasesBounceRate            `json:"bounce_rate,omitempty"`
+	DeferralRate          AnalyticsResponsePayloadTimeSeriesItemRateBasesDeferralRate          `json:"deferral_rate,omitempty"`
+	ComplaintRate         AnalyticsResponsePayloadTimeSeriesItemRateBasesComplaintRate         `json:"complaint_rate,omitempty"`
+	HumanOpenRate         AnalyticsResponsePayloadTimeSeriesItemRateBasesHumanOpenRate         `json:"human_open_rate,omitempty"`
+	HumanClickRate        AnalyticsResponsePayloadTimeSeriesItemRateBasesHumanClickRate        `json:"human_click_rate,omitempty"`
+}
+
+type AnalyticsResponsePayloadTimeSeriesItemPreviousMetrics struct {
+	Accepted                   *int     `json:"accepted,omitempty"`
+	Processed                  *int     `json:"processed,omitempty"`
+	Suppressed                 *int     `json:"suppressed,omitempty"`
+	PolicyRejected             *int     `json:"policy_rejected,omitempty"`
+	ApplicationFailed          *int     `json:"application_failed,omitempty"`
+	MtaAccepted                *int     `json:"mta_accepted,omitempty"`
+	Canceled                   *int     `json:"canceled,omitempty"`
+	Messages                   *int     `json:"messages,omitempty"`
+	Delivered                  *int     `json:"delivered,omitempty"`
+	Bounced                    *int     `json:"bounced,omitempty"`
+	SoftBounced                *int     `json:"soft_bounced,omitempty"`
+	AdministrativelyBounced    *int     `json:"administratively_bounced,omitempty"`
+	DeferredRecipients         *int     `json:"deferred_recipients,omitempty"`
+	DeferredEvents             *int     `json:"deferred_events,omitempty"`
+	DeliveryAttempts           *int     `json:"delivery_attempts,omitempty"`
+	AttemptedRecipients        *int     `json:"attempted_recipients,omitempty"`
+	TransportOutcomeRecipients *int     `json:"transport_outcome_recipients,omitempty"`
+	EffectiveDelivered         *int     `json:"effective_delivered,omitempty"`
+	OpenTrackedDelivered       *int     `json:"open_tracked_delivered,omitempty"`
+	ClickTrackedDelivered      *int     `json:"click_tracked_delivered,omitempty"`
+	OutOfBandBouncedRecipients *int     `json:"out_of_band_bounced_recipients,omitempty"`
+	OutOfBandBounceEvents      *int     `json:"out_of_band_bounce_events,omitempty"`
+	Complained                 *int     `json:"complained,omitempty"`
+	Unsubscribed               *int     `json:"unsubscribed,omitempty"`
+	HumanOpens                 *int     `json:"human_opens,omitempty"`
+	HumanOpensEvents           *int     `json:"human_opens_events,omitempty"`
+	HumanClicks                *int     `json:"human_clicks,omitempty"`
+	HumanClicksEvents          *int     `json:"human_clicks_events,omitempty"`
+	MachineOpens               *int     `json:"machine_opens,omitempty"`
+	MachineOpensEvents         *int     `json:"machine_opens_events,omitempty"`
+	MachineClicks              *int     `json:"machine_clicks,omitempty"`
+	MachineClicksEvents        *int     `json:"machine_clicks_events,omitempty"`
+	PrivacyOpens               *int     `json:"privacy_opens,omitempty"`
+	PrivacyOpensEvents         *int     `json:"privacy_opens_events,omitempty"`
+	PrivacyClicks              *int     `json:"privacy_clicks,omitempty"`
+	PrivacyClicksEvents        *int     `json:"privacy_clicks_events,omitempty"`
+	BotOpens                   *int     `json:"bot_opens,omitempty"`
+	BotOpensEvents             *int     `json:"bot_opens_events,omitempty"`
+	BotClicks                  *int     `json:"bot_clicks,omitempty"`
+	BotClicksEvents            *int     `json:"bot_clicks_events,omitempty"`
+	ScannerOpens               *int     `json:"scanner_opens,omitempty"`
+	ScannerOpensEvents         *int     `json:"scanner_opens_events,omitempty"`
+	ScannerClicks              *int     `json:"scanner_clicks,omitempty"`
+	ScannerClicksEvents        *int     `json:"scanner_clicks_events,omitempty"`
+	ObservedOpens              *int     `json:"observed_opens,omitempty"`
+	ObservedOpensEvents        *int     `json:"observed_opens_events,omitempty"`
+	ObservedClicks             *int     `json:"observed_clicks,omitempty"`
+	ObservedClicksEvents       *int     `json:"observed_clicks_events,omitempty"`
+	DeliveryRate               *float64 `json:"delivery_rate,omitempty"`
+	EffectiveDeliveryRate      *float64 `json:"effective_delivery_rate,omitempty"`
+	BounceRate                 *float64 `json:"bounce_rate,omitempty"`
+	DeferralRate               *float64 `json:"deferral_rate,omitempty"`
+	ComplaintRate              *float64 `json:"complaint_rate,omitempty"`
+	HumanOpenRate              *float64 `json:"human_open_rate,omitempty"`
+	HumanClickRate             *float64 `json:"human_click_rate,omitempty"`
+	ProcessingLatencyP50Ms     *float64 `json:"processing_latency_p50_ms,omitempty"`
+	ProcessingLatencyP95Ms     *float64 `json:"processing_latency_p95_ms,omitempty"`
+	ProcessingLatencyP99Ms     *float64 `json:"processing_latency_p99_ms,omitempty"`
+	ProcessingLatencySamples   *int     `json:"processing_latency_samples,omitempty"`
+	DeliveryLatencyP50Ms       *float64 `json:"delivery_latency_p50_ms,omitempty"`
+	DeliveryLatencyP95Ms       *float64 `json:"delivery_latency_p95_ms,omitempty"`
+	DeliveryLatencyP99Ms       *float64 `json:"delivery_latency_p99_ms,omitempty"`
+	DeliveryLatencySamples     *int     `json:"delivery_latency_samples,omitempty"`
+	TotalLatencyP50Ms          *float64 `json:"total_latency_p50_ms,omitempty"`
+	TotalLatencyP95Ms          *float64 `json:"total_latency_p95_ms,omitempty"`
+	TotalLatencyP99Ms          *float64 `json:"total_latency_p99_ms,omitempty"`
+	TotalLatencySamples        *int     `json:"total_latency_samples,omitempty"`
+}
+
+type AnalyticsResponsePayloadTimeSeriesItemPreviousRateBasesDeliveryRate struct {
+	Numerator   *int `json:"numerator"`
+	Denominator *int `json:"denominator"`
+}
+
+type AnalyticsResponsePayloadTimeSeriesItemPreviousRateBasesEffectiveDeliveryRate struct {
+	Numerator   *int `json:"numerator"`
+	Denominator *int `json:"denominator"`
+}
+
+type AnalyticsResponsePayloadTimeSeriesItemPreviousRateBasesBounceRate struct {
+	Numerator   *int `json:"numerator"`
+	Denominator *int `json:"denominator"`
+}
+
+type AnalyticsResponsePayloadTimeSeriesItemPreviousRateBasesDeferralRate struct {
+	Numerator   *int `json:"numerator"`
+	Denominator *int `json:"denominator"`
+}
+
+type AnalyticsResponsePayloadTimeSeriesItemPreviousRateBasesComplaintRate struct {
+	Numerator   *int `json:"numerator"`
+	Denominator *int `json:"denominator"`
+}
+
+type AnalyticsResponsePayloadTimeSeriesItemPreviousRateBasesHumanOpenRate struct {
+	Numerator   *int `json:"numerator"`
+	Denominator *int `json:"denominator"`
+}
+
+type AnalyticsResponsePayloadTimeSeriesItemPreviousRateBasesHumanClickRate struct {
+	Numerator   *int `json:"numerator"`
+	Denominator *int `json:"denominator"`
+}
+
+type AnalyticsResponsePayloadTimeSeriesItemPreviousRateBases struct {
+	DeliveryRate          AnalyticsResponsePayloadTimeSeriesItemPreviousRateBasesDeliveryRate          `json:"delivery_rate,omitempty"`
+	EffectiveDeliveryRate AnalyticsResponsePayloadTimeSeriesItemPreviousRateBasesEffectiveDeliveryRate `json:"effective_delivery_rate,omitempty"`
+	BounceRate            AnalyticsResponsePayloadTimeSeriesItemPreviousRateBasesBounceRate            `json:"bounce_rate,omitempty"`
+	DeferralRate          AnalyticsResponsePayloadTimeSeriesItemPreviousRateBasesDeferralRate          `json:"deferral_rate,omitempty"`
+	ComplaintRate         AnalyticsResponsePayloadTimeSeriesItemPreviousRateBasesComplaintRate         `json:"complaint_rate,omitempty"`
+	HumanOpenRate         AnalyticsResponsePayloadTimeSeriesItemPreviousRateBasesHumanOpenRate         `json:"human_open_rate,omitempty"`
+	HumanClickRate        AnalyticsResponsePayloadTimeSeriesItemPreviousRateBasesHumanClickRate        `json:"human_click_rate,omitempty"`
+}
+
+type AnalyticsResponsePayloadTimeSeriesItemPrevious struct {
+	Metrics   AnalyticsResponsePayloadTimeSeriesItemPreviousMetrics   `json:"metrics"`
+	RateBases AnalyticsResponsePayloadTimeSeriesItemPreviousRateBases `json:"rate_bases"`
+}
+
+type AnalyticsResponsePayloadTimeSeriesItem struct {
+	Metrics   AnalyticsResponsePayloadTimeSeriesItemMetrics   `json:"metrics"`
+	RateBases AnalyticsResponsePayloadTimeSeriesItemRateBases `json:"rate_bases"`
+	Previous  AnalyticsResponsePayloadTimeSeriesItemPrevious  `json:"previous,omitempty"`
+	Change    map[string]map[string]interface{}               `json:"change,omitempty"`
+	From      string                                          `json:"from"`
+	To        string                                          `json:"to"`
+	Available bool                                            `json:"available"`
+	Partial   bool                                            `json:"partial"`
+}
+
+type AnalyticsResponsePayloadBreakdownItemMetrics struct {
+	Accepted                   *int     `json:"accepted,omitempty"`
+	Processed                  *int     `json:"processed,omitempty"`
+	Suppressed                 *int     `json:"suppressed,omitempty"`
+	PolicyRejected             *int     `json:"policy_rejected,omitempty"`
+	ApplicationFailed          *int     `json:"application_failed,omitempty"`
+	MtaAccepted                *int     `json:"mta_accepted,omitempty"`
+	Canceled                   *int     `json:"canceled,omitempty"`
+	Messages                   *int     `json:"messages,omitempty"`
+	Delivered                  *int     `json:"delivered,omitempty"`
+	Bounced                    *int     `json:"bounced,omitempty"`
+	SoftBounced                *int     `json:"soft_bounced,omitempty"`
+	AdministrativelyBounced    *int     `json:"administratively_bounced,omitempty"`
+	DeferredRecipients         *int     `json:"deferred_recipients,omitempty"`
+	DeferredEvents             *int     `json:"deferred_events,omitempty"`
+	DeliveryAttempts           *int     `json:"delivery_attempts,omitempty"`
+	AttemptedRecipients        *int     `json:"attempted_recipients,omitempty"`
+	TransportOutcomeRecipients *int     `json:"transport_outcome_recipients,omitempty"`
+	EffectiveDelivered         *int     `json:"effective_delivered,omitempty"`
+	OpenTrackedDelivered       *int     `json:"open_tracked_delivered,omitempty"`
+	ClickTrackedDelivered      *int     `json:"click_tracked_delivered,omitempty"`
+	OutOfBandBouncedRecipients *int     `json:"out_of_band_bounced_recipients,omitempty"`
+	OutOfBandBounceEvents      *int     `json:"out_of_band_bounce_events,omitempty"`
+	Complained                 *int     `json:"complained,omitempty"`
+	Unsubscribed               *int     `json:"unsubscribed,omitempty"`
+	HumanOpens                 *int     `json:"human_opens,omitempty"`
+	HumanOpensEvents           *int     `json:"human_opens_events,omitempty"`
+	HumanClicks                *int     `json:"human_clicks,omitempty"`
+	HumanClicksEvents          *int     `json:"human_clicks_events,omitempty"`
+	MachineOpens               *int     `json:"machine_opens,omitempty"`
+	MachineOpensEvents         *int     `json:"machine_opens_events,omitempty"`
+	MachineClicks              *int     `json:"machine_clicks,omitempty"`
+	MachineClicksEvents        *int     `json:"machine_clicks_events,omitempty"`
+	PrivacyOpens               *int     `json:"privacy_opens,omitempty"`
+	PrivacyOpensEvents         *int     `json:"privacy_opens_events,omitempty"`
+	PrivacyClicks              *int     `json:"privacy_clicks,omitempty"`
+	PrivacyClicksEvents        *int     `json:"privacy_clicks_events,omitempty"`
+	BotOpens                   *int     `json:"bot_opens,omitempty"`
+	BotOpensEvents             *int     `json:"bot_opens_events,omitempty"`
+	BotClicks                  *int     `json:"bot_clicks,omitempty"`
+	BotClicksEvents            *int     `json:"bot_clicks_events,omitempty"`
+	ScannerOpens               *int     `json:"scanner_opens,omitempty"`
+	ScannerOpensEvents         *int     `json:"scanner_opens_events,omitempty"`
+	ScannerClicks              *int     `json:"scanner_clicks,omitempty"`
+	ScannerClicksEvents        *int     `json:"scanner_clicks_events,omitempty"`
+	ObservedOpens              *int     `json:"observed_opens,omitempty"`
+	ObservedOpensEvents        *int     `json:"observed_opens_events,omitempty"`
+	ObservedClicks             *int     `json:"observed_clicks,omitempty"`
+	ObservedClicksEvents       *int     `json:"observed_clicks_events,omitempty"`
+	DeliveryRate               *float64 `json:"delivery_rate,omitempty"`
+	EffectiveDeliveryRate      *float64 `json:"effective_delivery_rate,omitempty"`
+	BounceRate                 *float64 `json:"bounce_rate,omitempty"`
+	DeferralRate               *float64 `json:"deferral_rate,omitempty"`
+	ComplaintRate              *float64 `json:"complaint_rate,omitempty"`
+	HumanOpenRate              *float64 `json:"human_open_rate,omitempty"`
+	HumanClickRate             *float64 `json:"human_click_rate,omitempty"`
+	ProcessingLatencyP50Ms     *float64 `json:"processing_latency_p50_ms,omitempty"`
+	ProcessingLatencyP95Ms     *float64 `json:"processing_latency_p95_ms,omitempty"`
+	ProcessingLatencyP99Ms     *float64 `json:"processing_latency_p99_ms,omitempty"`
+	ProcessingLatencySamples   *int     `json:"processing_latency_samples,omitempty"`
+	DeliveryLatencyP50Ms       *float64 `json:"delivery_latency_p50_ms,omitempty"`
+	DeliveryLatencyP95Ms       *float64 `json:"delivery_latency_p95_ms,omitempty"`
+	DeliveryLatencyP99Ms       *float64 `json:"delivery_latency_p99_ms,omitempty"`
+	DeliveryLatencySamples     *int     `json:"delivery_latency_samples,omitempty"`
+	TotalLatencyP50Ms          *float64 `json:"total_latency_p50_ms,omitempty"`
+	TotalLatencyP95Ms          *float64 `json:"total_latency_p95_ms,omitempty"`
+	TotalLatencyP99Ms          *float64 `json:"total_latency_p99_ms,omitempty"`
+	TotalLatencySamples        *int     `json:"total_latency_samples,omitempty"`
+}
+
+type AnalyticsResponsePayloadBreakdownItemRateBasesDeliveryRate struct {
+	Numerator   *int `json:"numerator"`
+	Denominator *int `json:"denominator"`
+}
+
+type AnalyticsResponsePayloadBreakdownItemRateBasesEffectiveDeliveryRate struct {
+	Numerator   *int `json:"numerator"`
+	Denominator *int `json:"denominator"`
+}
+
+type AnalyticsResponsePayloadBreakdownItemRateBasesBounceRate struct {
+	Numerator   *int `json:"numerator"`
+	Denominator *int `json:"denominator"`
+}
+
+type AnalyticsResponsePayloadBreakdownItemRateBasesDeferralRate struct {
+	Numerator   *int `json:"numerator"`
+	Denominator *int `json:"denominator"`
+}
+
+type AnalyticsResponsePayloadBreakdownItemRateBasesComplaintRate struct {
+	Numerator   *int `json:"numerator"`
+	Denominator *int `json:"denominator"`
+}
+
+type AnalyticsResponsePayloadBreakdownItemRateBasesHumanOpenRate struct {
+	Numerator   *int `json:"numerator"`
+	Denominator *int `json:"denominator"`
+}
+
+type AnalyticsResponsePayloadBreakdownItemRateBasesHumanClickRate struct {
+	Numerator   *int `json:"numerator"`
+	Denominator *int `json:"denominator"`
+}
+
+type AnalyticsResponsePayloadBreakdownItemRateBases struct {
+	DeliveryRate          AnalyticsResponsePayloadBreakdownItemRateBasesDeliveryRate          `json:"delivery_rate,omitempty"`
+	EffectiveDeliveryRate AnalyticsResponsePayloadBreakdownItemRateBasesEffectiveDeliveryRate `json:"effective_delivery_rate,omitempty"`
+	BounceRate            AnalyticsResponsePayloadBreakdownItemRateBasesBounceRate            `json:"bounce_rate,omitempty"`
+	DeferralRate          AnalyticsResponsePayloadBreakdownItemRateBasesDeferralRate          `json:"deferral_rate,omitempty"`
+	ComplaintRate         AnalyticsResponsePayloadBreakdownItemRateBasesComplaintRate         `json:"complaint_rate,omitempty"`
+	HumanOpenRate         AnalyticsResponsePayloadBreakdownItemRateBasesHumanOpenRate         `json:"human_open_rate,omitempty"`
+	HumanClickRate        AnalyticsResponsePayloadBreakdownItemRateBasesHumanClickRate        `json:"human_click_rate,omitempty"`
+}
+
+type AnalyticsResponsePayloadBreakdownItemPreviousMetrics struct {
+	Accepted                   *int     `json:"accepted,omitempty"`
+	Processed                  *int     `json:"processed,omitempty"`
+	Suppressed                 *int     `json:"suppressed,omitempty"`
+	PolicyRejected             *int     `json:"policy_rejected,omitempty"`
+	ApplicationFailed          *int     `json:"application_failed,omitempty"`
+	MtaAccepted                *int     `json:"mta_accepted,omitempty"`
+	Canceled                   *int     `json:"canceled,omitempty"`
+	Messages                   *int     `json:"messages,omitempty"`
+	Delivered                  *int     `json:"delivered,omitempty"`
+	Bounced                    *int     `json:"bounced,omitempty"`
+	SoftBounced                *int     `json:"soft_bounced,omitempty"`
+	AdministrativelyBounced    *int     `json:"administratively_bounced,omitempty"`
+	DeferredRecipients         *int     `json:"deferred_recipients,omitempty"`
+	DeferredEvents             *int     `json:"deferred_events,omitempty"`
+	DeliveryAttempts           *int     `json:"delivery_attempts,omitempty"`
+	AttemptedRecipients        *int     `json:"attempted_recipients,omitempty"`
+	TransportOutcomeRecipients *int     `json:"transport_outcome_recipients,omitempty"`
+	EffectiveDelivered         *int     `json:"effective_delivered,omitempty"`
+	OpenTrackedDelivered       *int     `json:"open_tracked_delivered,omitempty"`
+	ClickTrackedDelivered      *int     `json:"click_tracked_delivered,omitempty"`
+	OutOfBandBouncedRecipients *int     `json:"out_of_band_bounced_recipients,omitempty"`
+	OutOfBandBounceEvents      *int     `json:"out_of_band_bounce_events,omitempty"`
+	Complained                 *int     `json:"complained,omitempty"`
+	Unsubscribed               *int     `json:"unsubscribed,omitempty"`
+	HumanOpens                 *int     `json:"human_opens,omitempty"`
+	HumanOpensEvents           *int     `json:"human_opens_events,omitempty"`
+	HumanClicks                *int     `json:"human_clicks,omitempty"`
+	HumanClicksEvents          *int     `json:"human_clicks_events,omitempty"`
+	MachineOpens               *int     `json:"machine_opens,omitempty"`
+	MachineOpensEvents         *int     `json:"machine_opens_events,omitempty"`
+	MachineClicks              *int     `json:"machine_clicks,omitempty"`
+	MachineClicksEvents        *int     `json:"machine_clicks_events,omitempty"`
+	PrivacyOpens               *int     `json:"privacy_opens,omitempty"`
+	PrivacyOpensEvents         *int     `json:"privacy_opens_events,omitempty"`
+	PrivacyClicks              *int     `json:"privacy_clicks,omitempty"`
+	PrivacyClicksEvents        *int     `json:"privacy_clicks_events,omitempty"`
+	BotOpens                   *int     `json:"bot_opens,omitempty"`
+	BotOpensEvents             *int     `json:"bot_opens_events,omitempty"`
+	BotClicks                  *int     `json:"bot_clicks,omitempty"`
+	BotClicksEvents            *int     `json:"bot_clicks_events,omitempty"`
+	ScannerOpens               *int     `json:"scanner_opens,omitempty"`
+	ScannerOpensEvents         *int     `json:"scanner_opens_events,omitempty"`
+	ScannerClicks              *int     `json:"scanner_clicks,omitempty"`
+	ScannerClicksEvents        *int     `json:"scanner_clicks_events,omitempty"`
+	ObservedOpens              *int     `json:"observed_opens,omitempty"`
+	ObservedOpensEvents        *int     `json:"observed_opens_events,omitempty"`
+	ObservedClicks             *int     `json:"observed_clicks,omitempty"`
+	ObservedClicksEvents       *int     `json:"observed_clicks_events,omitempty"`
+	DeliveryRate               *float64 `json:"delivery_rate,omitempty"`
+	EffectiveDeliveryRate      *float64 `json:"effective_delivery_rate,omitempty"`
+	BounceRate                 *float64 `json:"bounce_rate,omitempty"`
+	DeferralRate               *float64 `json:"deferral_rate,omitempty"`
+	ComplaintRate              *float64 `json:"complaint_rate,omitempty"`
+	HumanOpenRate              *float64 `json:"human_open_rate,omitempty"`
+	HumanClickRate             *float64 `json:"human_click_rate,omitempty"`
+	ProcessingLatencyP50Ms     *float64 `json:"processing_latency_p50_ms,omitempty"`
+	ProcessingLatencyP95Ms     *float64 `json:"processing_latency_p95_ms,omitempty"`
+	ProcessingLatencyP99Ms     *float64 `json:"processing_latency_p99_ms,omitempty"`
+	ProcessingLatencySamples   *int     `json:"processing_latency_samples,omitempty"`
+	DeliveryLatencyP50Ms       *float64 `json:"delivery_latency_p50_ms,omitempty"`
+	DeliveryLatencyP95Ms       *float64 `json:"delivery_latency_p95_ms,omitempty"`
+	DeliveryLatencyP99Ms       *float64 `json:"delivery_latency_p99_ms,omitempty"`
+	DeliveryLatencySamples     *int     `json:"delivery_latency_samples,omitempty"`
+	TotalLatencyP50Ms          *float64 `json:"total_latency_p50_ms,omitempty"`
+	TotalLatencyP95Ms          *float64 `json:"total_latency_p95_ms,omitempty"`
+	TotalLatencyP99Ms          *float64 `json:"total_latency_p99_ms,omitempty"`
+	TotalLatencySamples        *int     `json:"total_latency_samples,omitempty"`
+}
+
+type AnalyticsResponsePayloadBreakdownItemPreviousRateBasesDeliveryRate struct {
+	Numerator   *int `json:"numerator"`
+	Denominator *int `json:"denominator"`
+}
+
+type AnalyticsResponsePayloadBreakdownItemPreviousRateBasesEffectiveDeliveryRate struct {
+	Numerator   *int `json:"numerator"`
+	Denominator *int `json:"denominator"`
+}
+
+type AnalyticsResponsePayloadBreakdownItemPreviousRateBasesBounceRate struct {
+	Numerator   *int `json:"numerator"`
+	Denominator *int `json:"denominator"`
+}
+
+type AnalyticsResponsePayloadBreakdownItemPreviousRateBasesDeferralRate struct {
+	Numerator   *int `json:"numerator"`
+	Denominator *int `json:"denominator"`
+}
+
+type AnalyticsResponsePayloadBreakdownItemPreviousRateBasesComplaintRate struct {
+	Numerator   *int `json:"numerator"`
+	Denominator *int `json:"denominator"`
+}
+
+type AnalyticsResponsePayloadBreakdownItemPreviousRateBasesHumanOpenRate struct {
+	Numerator   *int `json:"numerator"`
+	Denominator *int `json:"denominator"`
+}
+
+type AnalyticsResponsePayloadBreakdownItemPreviousRateBasesHumanClickRate struct {
+	Numerator   *int `json:"numerator"`
+	Denominator *int `json:"denominator"`
+}
+
+type AnalyticsResponsePayloadBreakdownItemPreviousRateBases struct {
+	DeliveryRate          AnalyticsResponsePayloadBreakdownItemPreviousRateBasesDeliveryRate          `json:"delivery_rate,omitempty"`
+	EffectiveDeliveryRate AnalyticsResponsePayloadBreakdownItemPreviousRateBasesEffectiveDeliveryRate `json:"effective_delivery_rate,omitempty"`
+	BounceRate            AnalyticsResponsePayloadBreakdownItemPreviousRateBasesBounceRate            `json:"bounce_rate,omitempty"`
+	DeferralRate          AnalyticsResponsePayloadBreakdownItemPreviousRateBasesDeferralRate          `json:"deferral_rate,omitempty"`
+	ComplaintRate         AnalyticsResponsePayloadBreakdownItemPreviousRateBasesComplaintRate         `json:"complaint_rate,omitempty"`
+	HumanOpenRate         AnalyticsResponsePayloadBreakdownItemPreviousRateBasesHumanOpenRate         `json:"human_open_rate,omitempty"`
+	HumanClickRate        AnalyticsResponsePayloadBreakdownItemPreviousRateBasesHumanClickRate        `json:"human_click_rate,omitempty"`
+}
+
+type AnalyticsResponsePayloadBreakdownItemPrevious struct {
+	Metrics   AnalyticsResponsePayloadBreakdownItemPreviousMetrics   `json:"metrics"`
+	RateBases AnalyticsResponsePayloadBreakdownItemPreviousRateBases `json:"rate_bases"`
+}
+
+type AnalyticsResponsePayloadBreakdownItemTrendItemMetrics struct {
+	Accepted                   *int     `json:"accepted,omitempty"`
+	Processed                  *int     `json:"processed,omitempty"`
+	Suppressed                 *int     `json:"suppressed,omitempty"`
+	PolicyRejected             *int     `json:"policy_rejected,omitempty"`
+	ApplicationFailed          *int     `json:"application_failed,omitempty"`
+	MtaAccepted                *int     `json:"mta_accepted,omitempty"`
+	Canceled                   *int     `json:"canceled,omitempty"`
+	Messages                   *int     `json:"messages,omitempty"`
+	Delivered                  *int     `json:"delivered,omitempty"`
+	Bounced                    *int     `json:"bounced,omitempty"`
+	SoftBounced                *int     `json:"soft_bounced,omitempty"`
+	AdministrativelyBounced    *int     `json:"administratively_bounced,omitempty"`
+	DeferredRecipients         *int     `json:"deferred_recipients,omitempty"`
+	DeferredEvents             *int     `json:"deferred_events,omitempty"`
+	DeliveryAttempts           *int     `json:"delivery_attempts,omitempty"`
+	AttemptedRecipients        *int     `json:"attempted_recipients,omitempty"`
+	TransportOutcomeRecipients *int     `json:"transport_outcome_recipients,omitempty"`
+	EffectiveDelivered         *int     `json:"effective_delivered,omitempty"`
+	OpenTrackedDelivered       *int     `json:"open_tracked_delivered,omitempty"`
+	ClickTrackedDelivered      *int     `json:"click_tracked_delivered,omitempty"`
+	OutOfBandBouncedRecipients *int     `json:"out_of_band_bounced_recipients,omitempty"`
+	OutOfBandBounceEvents      *int     `json:"out_of_band_bounce_events,omitempty"`
+	Complained                 *int     `json:"complained,omitempty"`
+	Unsubscribed               *int     `json:"unsubscribed,omitempty"`
+	HumanOpens                 *int     `json:"human_opens,omitempty"`
+	HumanOpensEvents           *int     `json:"human_opens_events,omitempty"`
+	HumanClicks                *int     `json:"human_clicks,omitempty"`
+	HumanClicksEvents          *int     `json:"human_clicks_events,omitempty"`
+	MachineOpens               *int     `json:"machine_opens,omitempty"`
+	MachineOpensEvents         *int     `json:"machine_opens_events,omitempty"`
+	MachineClicks              *int     `json:"machine_clicks,omitempty"`
+	MachineClicksEvents        *int     `json:"machine_clicks_events,omitempty"`
+	PrivacyOpens               *int     `json:"privacy_opens,omitempty"`
+	PrivacyOpensEvents         *int     `json:"privacy_opens_events,omitempty"`
+	PrivacyClicks              *int     `json:"privacy_clicks,omitempty"`
+	PrivacyClicksEvents        *int     `json:"privacy_clicks_events,omitempty"`
+	BotOpens                   *int     `json:"bot_opens,omitempty"`
+	BotOpensEvents             *int     `json:"bot_opens_events,omitempty"`
+	BotClicks                  *int     `json:"bot_clicks,omitempty"`
+	BotClicksEvents            *int     `json:"bot_clicks_events,omitempty"`
+	ScannerOpens               *int     `json:"scanner_opens,omitempty"`
+	ScannerOpensEvents         *int     `json:"scanner_opens_events,omitempty"`
+	ScannerClicks              *int     `json:"scanner_clicks,omitempty"`
+	ScannerClicksEvents        *int     `json:"scanner_clicks_events,omitempty"`
+	ObservedOpens              *int     `json:"observed_opens,omitempty"`
+	ObservedOpensEvents        *int     `json:"observed_opens_events,omitempty"`
+	ObservedClicks             *int     `json:"observed_clicks,omitempty"`
+	ObservedClicksEvents       *int     `json:"observed_clicks_events,omitempty"`
+	DeliveryRate               *float64 `json:"delivery_rate,omitempty"`
+	EffectiveDeliveryRate      *float64 `json:"effective_delivery_rate,omitempty"`
+	BounceRate                 *float64 `json:"bounce_rate,omitempty"`
+	DeferralRate               *float64 `json:"deferral_rate,omitempty"`
+	ComplaintRate              *float64 `json:"complaint_rate,omitempty"`
+	HumanOpenRate              *float64 `json:"human_open_rate,omitempty"`
+	HumanClickRate             *float64 `json:"human_click_rate,omitempty"`
+	ProcessingLatencyP50Ms     *float64 `json:"processing_latency_p50_ms,omitempty"`
+	ProcessingLatencyP95Ms     *float64 `json:"processing_latency_p95_ms,omitempty"`
+	ProcessingLatencyP99Ms     *float64 `json:"processing_latency_p99_ms,omitempty"`
+	ProcessingLatencySamples   *int     `json:"processing_latency_samples,omitempty"`
+	DeliveryLatencyP50Ms       *float64 `json:"delivery_latency_p50_ms,omitempty"`
+	DeliveryLatencyP95Ms       *float64 `json:"delivery_latency_p95_ms,omitempty"`
+	DeliveryLatencyP99Ms       *float64 `json:"delivery_latency_p99_ms,omitempty"`
+	DeliveryLatencySamples     *int     `json:"delivery_latency_samples,omitempty"`
+	TotalLatencyP50Ms          *float64 `json:"total_latency_p50_ms,omitempty"`
+	TotalLatencyP95Ms          *float64 `json:"total_latency_p95_ms,omitempty"`
+	TotalLatencyP99Ms          *float64 `json:"total_latency_p99_ms,omitempty"`
+	TotalLatencySamples        *int     `json:"total_latency_samples,omitempty"`
+}
+
+type AnalyticsResponsePayloadBreakdownItemTrendItemRateBasesDeliveryRate struct {
+	Numerator   *int `json:"numerator"`
+	Denominator *int `json:"denominator"`
+}
+
+type AnalyticsResponsePayloadBreakdownItemTrendItemRateBasesEffectiveDeliveryRate struct {
+	Numerator   *int `json:"numerator"`
+	Denominator *int `json:"denominator"`
+}
+
+type AnalyticsResponsePayloadBreakdownItemTrendItemRateBasesBounceRate struct {
+	Numerator   *int `json:"numerator"`
+	Denominator *int `json:"denominator"`
+}
+
+type AnalyticsResponsePayloadBreakdownItemTrendItemRateBasesDeferralRate struct {
+	Numerator   *int `json:"numerator"`
+	Denominator *int `json:"denominator"`
+}
+
+type AnalyticsResponsePayloadBreakdownItemTrendItemRateBasesComplaintRate struct {
+	Numerator   *int `json:"numerator"`
+	Denominator *int `json:"denominator"`
+}
+
+type AnalyticsResponsePayloadBreakdownItemTrendItemRateBasesHumanOpenRate struct {
+	Numerator   *int `json:"numerator"`
+	Denominator *int `json:"denominator"`
+}
+
+type AnalyticsResponsePayloadBreakdownItemTrendItemRateBasesHumanClickRate struct {
+	Numerator   *int `json:"numerator"`
+	Denominator *int `json:"denominator"`
+}
+
+type AnalyticsResponsePayloadBreakdownItemTrendItemRateBases struct {
+	DeliveryRate          AnalyticsResponsePayloadBreakdownItemTrendItemRateBasesDeliveryRate          `json:"delivery_rate,omitempty"`
+	EffectiveDeliveryRate AnalyticsResponsePayloadBreakdownItemTrendItemRateBasesEffectiveDeliveryRate `json:"effective_delivery_rate,omitempty"`
+	BounceRate            AnalyticsResponsePayloadBreakdownItemTrendItemRateBasesBounceRate            `json:"bounce_rate,omitempty"`
+	DeferralRate          AnalyticsResponsePayloadBreakdownItemTrendItemRateBasesDeferralRate          `json:"deferral_rate,omitempty"`
+	ComplaintRate         AnalyticsResponsePayloadBreakdownItemTrendItemRateBasesComplaintRate         `json:"complaint_rate,omitempty"`
+	HumanOpenRate         AnalyticsResponsePayloadBreakdownItemTrendItemRateBasesHumanOpenRate         `json:"human_open_rate,omitempty"`
+	HumanClickRate        AnalyticsResponsePayloadBreakdownItemTrendItemRateBasesHumanClickRate        `json:"human_click_rate,omitempty"`
+}
+
+type AnalyticsResponsePayloadBreakdownItemTrendItemPreviousMetrics struct {
+	Accepted                   *int     `json:"accepted,omitempty"`
+	Processed                  *int     `json:"processed,omitempty"`
+	Suppressed                 *int     `json:"suppressed,omitempty"`
+	PolicyRejected             *int     `json:"policy_rejected,omitempty"`
+	ApplicationFailed          *int     `json:"application_failed,omitempty"`
+	MtaAccepted                *int     `json:"mta_accepted,omitempty"`
+	Canceled                   *int     `json:"canceled,omitempty"`
+	Messages                   *int     `json:"messages,omitempty"`
+	Delivered                  *int     `json:"delivered,omitempty"`
+	Bounced                    *int     `json:"bounced,omitempty"`
+	SoftBounced                *int     `json:"soft_bounced,omitempty"`
+	AdministrativelyBounced    *int     `json:"administratively_bounced,omitempty"`
+	DeferredRecipients         *int     `json:"deferred_recipients,omitempty"`
+	DeferredEvents             *int     `json:"deferred_events,omitempty"`
+	DeliveryAttempts           *int     `json:"delivery_attempts,omitempty"`
+	AttemptedRecipients        *int     `json:"attempted_recipients,omitempty"`
+	TransportOutcomeRecipients *int     `json:"transport_outcome_recipients,omitempty"`
+	EffectiveDelivered         *int     `json:"effective_delivered,omitempty"`
+	OpenTrackedDelivered       *int     `json:"open_tracked_delivered,omitempty"`
+	ClickTrackedDelivered      *int     `json:"click_tracked_delivered,omitempty"`
+	OutOfBandBouncedRecipients *int     `json:"out_of_band_bounced_recipients,omitempty"`
+	OutOfBandBounceEvents      *int     `json:"out_of_band_bounce_events,omitempty"`
+	Complained                 *int     `json:"complained,omitempty"`
+	Unsubscribed               *int     `json:"unsubscribed,omitempty"`
+	HumanOpens                 *int     `json:"human_opens,omitempty"`
+	HumanOpensEvents           *int     `json:"human_opens_events,omitempty"`
+	HumanClicks                *int     `json:"human_clicks,omitempty"`
+	HumanClicksEvents          *int     `json:"human_clicks_events,omitempty"`
+	MachineOpens               *int     `json:"machine_opens,omitempty"`
+	MachineOpensEvents         *int     `json:"machine_opens_events,omitempty"`
+	MachineClicks              *int     `json:"machine_clicks,omitempty"`
+	MachineClicksEvents        *int     `json:"machine_clicks_events,omitempty"`
+	PrivacyOpens               *int     `json:"privacy_opens,omitempty"`
+	PrivacyOpensEvents         *int     `json:"privacy_opens_events,omitempty"`
+	PrivacyClicks              *int     `json:"privacy_clicks,omitempty"`
+	PrivacyClicksEvents        *int     `json:"privacy_clicks_events,omitempty"`
+	BotOpens                   *int     `json:"bot_opens,omitempty"`
+	BotOpensEvents             *int     `json:"bot_opens_events,omitempty"`
+	BotClicks                  *int     `json:"bot_clicks,omitempty"`
+	BotClicksEvents            *int     `json:"bot_clicks_events,omitempty"`
+	ScannerOpens               *int     `json:"scanner_opens,omitempty"`
+	ScannerOpensEvents         *int     `json:"scanner_opens_events,omitempty"`
+	ScannerClicks              *int     `json:"scanner_clicks,omitempty"`
+	ScannerClicksEvents        *int     `json:"scanner_clicks_events,omitempty"`
+	ObservedOpens              *int     `json:"observed_opens,omitempty"`
+	ObservedOpensEvents        *int     `json:"observed_opens_events,omitempty"`
+	ObservedClicks             *int     `json:"observed_clicks,omitempty"`
+	ObservedClicksEvents       *int     `json:"observed_clicks_events,omitempty"`
+	DeliveryRate               *float64 `json:"delivery_rate,omitempty"`
+	EffectiveDeliveryRate      *float64 `json:"effective_delivery_rate,omitempty"`
+	BounceRate                 *float64 `json:"bounce_rate,omitempty"`
+	DeferralRate               *float64 `json:"deferral_rate,omitempty"`
+	ComplaintRate              *float64 `json:"complaint_rate,omitempty"`
+	HumanOpenRate              *float64 `json:"human_open_rate,omitempty"`
+	HumanClickRate             *float64 `json:"human_click_rate,omitempty"`
+	ProcessingLatencyP50Ms     *float64 `json:"processing_latency_p50_ms,omitempty"`
+	ProcessingLatencyP95Ms     *float64 `json:"processing_latency_p95_ms,omitempty"`
+	ProcessingLatencyP99Ms     *float64 `json:"processing_latency_p99_ms,omitempty"`
+	ProcessingLatencySamples   *int     `json:"processing_latency_samples,omitempty"`
+	DeliveryLatencyP50Ms       *float64 `json:"delivery_latency_p50_ms,omitempty"`
+	DeliveryLatencyP95Ms       *float64 `json:"delivery_latency_p95_ms,omitempty"`
+	DeliveryLatencyP99Ms       *float64 `json:"delivery_latency_p99_ms,omitempty"`
+	DeliveryLatencySamples     *int     `json:"delivery_latency_samples,omitempty"`
+	TotalLatencyP50Ms          *float64 `json:"total_latency_p50_ms,omitempty"`
+	TotalLatencyP95Ms          *float64 `json:"total_latency_p95_ms,omitempty"`
+	TotalLatencyP99Ms          *float64 `json:"total_latency_p99_ms,omitempty"`
+	TotalLatencySamples        *int     `json:"total_latency_samples,omitempty"`
+}
+
+type AnalyticsResponsePayloadBreakdownItemTrendItemPreviousRateBasesDeliveryRate struct {
+	Numerator   *int `json:"numerator"`
+	Denominator *int `json:"denominator"`
+}
+
+type AnalyticsResponsePayloadBreakdownItemTrendItemPreviousRateBasesEffectiveDeliveryRate struct {
+	Numerator   *int `json:"numerator"`
+	Denominator *int `json:"denominator"`
+}
+
+type AnalyticsResponsePayloadBreakdownItemTrendItemPreviousRateBasesBounceRate struct {
+	Numerator   *int `json:"numerator"`
+	Denominator *int `json:"denominator"`
+}
+
+type AnalyticsResponsePayloadBreakdownItemTrendItemPreviousRateBasesDeferralRate struct {
+	Numerator   *int `json:"numerator"`
+	Denominator *int `json:"denominator"`
+}
+
+type AnalyticsResponsePayloadBreakdownItemTrendItemPreviousRateBasesComplaintRate struct {
+	Numerator   *int `json:"numerator"`
+	Denominator *int `json:"denominator"`
+}
+
+type AnalyticsResponsePayloadBreakdownItemTrendItemPreviousRateBasesHumanOpenRate struct {
+	Numerator   *int `json:"numerator"`
+	Denominator *int `json:"denominator"`
+}
+
+type AnalyticsResponsePayloadBreakdownItemTrendItemPreviousRateBasesHumanClickRate struct {
+	Numerator   *int `json:"numerator"`
+	Denominator *int `json:"denominator"`
+}
+
+type AnalyticsResponsePayloadBreakdownItemTrendItemPreviousRateBases struct {
+	DeliveryRate          AnalyticsResponsePayloadBreakdownItemTrendItemPreviousRateBasesDeliveryRate          `json:"delivery_rate,omitempty"`
+	EffectiveDeliveryRate AnalyticsResponsePayloadBreakdownItemTrendItemPreviousRateBasesEffectiveDeliveryRate `json:"effective_delivery_rate,omitempty"`
+	BounceRate            AnalyticsResponsePayloadBreakdownItemTrendItemPreviousRateBasesBounceRate            `json:"bounce_rate,omitempty"`
+	DeferralRate          AnalyticsResponsePayloadBreakdownItemTrendItemPreviousRateBasesDeferralRate          `json:"deferral_rate,omitempty"`
+	ComplaintRate         AnalyticsResponsePayloadBreakdownItemTrendItemPreviousRateBasesComplaintRate         `json:"complaint_rate,omitempty"`
+	HumanOpenRate         AnalyticsResponsePayloadBreakdownItemTrendItemPreviousRateBasesHumanOpenRate         `json:"human_open_rate,omitempty"`
+	HumanClickRate        AnalyticsResponsePayloadBreakdownItemTrendItemPreviousRateBasesHumanClickRate        `json:"human_click_rate,omitempty"`
+}
+
+type AnalyticsResponsePayloadBreakdownItemTrendItemPrevious struct {
+	Metrics   AnalyticsResponsePayloadBreakdownItemTrendItemPreviousMetrics   `json:"metrics"`
+	RateBases AnalyticsResponsePayloadBreakdownItemTrendItemPreviousRateBases `json:"rate_bases"`
+}
+
+type AnalyticsResponsePayloadBreakdownItemTrendItem struct {
+	Metrics   AnalyticsResponsePayloadBreakdownItemTrendItemMetrics   `json:"metrics"`
+	RateBases AnalyticsResponsePayloadBreakdownItemTrendItemRateBases `json:"rate_bases"`
+	Previous  AnalyticsResponsePayloadBreakdownItemTrendItemPrevious  `json:"previous,omitempty"`
+	Change    map[string]map[string]interface{}                       `json:"change,omitempty"`
+	From      string                                                  `json:"from"`
+	To        string                                                  `json:"to"`
+	Available bool                                                    `json:"available"`
+	Partial   bool                                                    `json:"partial"`
+}
+
+type AnalyticsResponsePayloadBreakdownItem struct {
+	Metrics    AnalyticsResponsePayloadBreakdownItemMetrics     `json:"metrics"`
+	RateBases  AnalyticsResponsePayloadBreakdownItemRateBases   `json:"rate_bases"`
+	Previous   AnalyticsResponsePayloadBreakdownItemPrevious    `json:"previous,omitempty"`
+	Change     map[string]map[string]interface{}                `json:"change,omitempty"`
+	Dimensions map[string]*string                               `json:"dimensions"`
+	Trend      []AnalyticsResponsePayloadBreakdownItemTrendItem `json:"trend,omitempty"`
+}
+
+type AnalyticsResponsePayload struct {
+	Summary    AnalyticsResponsePayloadSummary          `json:"summary,omitempty"`
+	TimeSeries []AnalyticsResponsePayloadTimeSeriesItem `json:"time_series,omitempty"`
+	Breakdown  []AnalyticsResponsePayloadBreakdownItem  `json:"breakdown,omitempty"`
+}
