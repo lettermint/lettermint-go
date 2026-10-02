@@ -568,6 +568,11 @@ type StoreSuppressionData struct {
 	AppliesTo *SuppressionAppliesTo `json:"applies_to,omitempty"`
 }
 
+type WebhookBasicAuthData struct {
+	Username string `json:"username"`
+	Password string `json:"password"`
+}
+
 type StoreWebhookData struct {
 	Name                 string                     `json:"name"`
 	URL                  string                     `json:"url"`
@@ -579,6 +584,7 @@ type StoreWebhookData struct {
 	RouteIDs             []string                   `json:"route_ids,omitempty"`
 	RouteID              *string                    `json:"route_id,omitempty"`
 	DeliveryModeFilter   *WebhookDeliveryModeFilter `json:"delivery_mode_filter,omitempty"`
+	BasicAuth            **WebhookBasicAuthData     `json:"basic_auth,omitempty"`
 }
 
 type SuppressedRecipientData struct {
@@ -753,6 +759,7 @@ type UpdateWebhookData struct {
 	RouteIDs             []string                  `json:"route_ids,omitempty"`
 	RouteID              *string                   `json:"route_id,omitempty"`
 	DeliveryModeFilter   WebhookDeliveryModeFilter `json:"delivery_mode_filter,omitempty"`
+	BasicAuth            **WebhookBasicAuthData    `json:"basic_auth,omitempty"`
 }
 
 type WebhookData struct {
@@ -770,6 +777,7 @@ type WebhookData struct {
 	CreatedAt            string                    `json:"created_at"`
 	UpdatedAt            string                    `json:"updated_at"`
 	DeliveryModeFilter   WebhookDeliveryModeFilter `json:"delivery_mode_filter"`
+	HasBasicAuth         bool                      `json:"has_basic_auth"`
 }
 
 type WebhookDeliveryData struct {
@@ -859,6 +867,7 @@ type WebhookListData struct {
 	LastCalledAt       *string                   `json:"last_called_at"`
 	CreatedAt          string                    `json:"created_at"`
 	UpdatedAt          string                    `json:"updated_at"`
+	HasBasicAuth       bool                      `json:"has_basic_auth"`
 }
 
 type WebhookScope string
@@ -885,6 +894,7 @@ type WebhookSecretData struct {
 	CreatedAt            string                    `json:"created_at"`
 	UpdatedAt            string                    `json:"updated_at"`
 	DeliveryModeFilter   WebhookDeliveryModeFilter `json:"delivery_mode_filter"`
+	HasBasicAuth         bool                      `json:"has_basic_auth"`
 }
 
 type DeliveryMode string
