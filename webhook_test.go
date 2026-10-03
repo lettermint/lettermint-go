@@ -3,387 +3,270 @@ package lettermint
 import (
 	"crypto/hmac"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/hex"
-	"errors"
+	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
 )
 
-// generateTestSignature creates a valid signature for testing
-func generateTestSignature(payload string, secret string, timestamp int64) string {
-	signedPayload := fmt.Sprintf("%d.%s", timestamp, payload)
-	h := hmac.New(sha256.New, []byte(secret))
-	h.Write([]byte(signedPayload))
-	hash := hex.EncodeToString(h.Sum(nil))
-	return fmt.Sprintf("t=%d,v1=%s", timestamp, hash)
+const webhookSecret = "whsec_testSecretValue0123456789abcdef"
+
+var webhookNow = time.Unix(1767225570, 0)
+
+const webhookBody = `{"id":"d1","event":"message.delivered","timestamp":"2026-01-01T00:00:00Z","data":{"message_id":"m1","recipient":"jane@example.test"}}`
+
+func sign(secret string, t int64, body string) string {
+	mac := hmac.New(sha256.New, []byte(secret))
+	mac.Write([]byte(strconv.FormatInt(t, 10) + "." + body))
+	return hex.EncodeToString(mac.Sum(nil))
 }
 
-func TestVerifyWebhook_Success(t *testing.T) {
-	payload := `{"id":"wh_123","event":"message.delivered","timestamp":"2026-03-23T08:56:21.046734Z","data":{"message_id":"msg_123","recipient":"user@example.com"}}`
-	secret := "test-secret"
-	timestamp := time.Now().Unix()
-	signature := generateTestSignature(payload, secret, timestamp)
+func signedHeaders(t int64, body string) http.Header {
+	return http.Header{
+		HeaderSignature: {fmt.Sprintf("t=%d,v1=%s", t, sign(webhookSecret, t, body))},
+		HeaderDelivery:  {strconv.FormatInt(t, 10)},
+	}
+}
 
-	event, err := VerifyWebhook(signature, []byte(payload), 0, secret, DefaultWebhookTolerance)
+func testWebhook(t *testing.T, options ...WebhookOption) *Webhook {
+	t.Helper()
+	w, err := NewWebhook(webhookSecret, append([]WebhookOption{WithClock(func() time.Time { return webhookNow })}, options...)...)
 	if err != nil {
-		t.Fatalf("VerifyWebhook() error = %v", err)
+		t.Fatal(err)
 	}
-
-	if event == nil {
-		t.Fatal("VerifyWebhook() returned nil event")
-	}
-
-	if event.ID != "wh_123" {
-		t.Errorf("event.ID = %v, want wh_123", event.ID)
-	}
-
-	if event.Event != "message.delivered" {
-		t.Errorf("event.Event = %v, want message.delivered", event.Event)
-	}
-
-	if event.Data.MessageID != "msg_123" {
-		t.Errorf("event.Data.MessageID = %v, want msg_123", event.Data.MessageID)
-	}
-
-	if event.Data.Recipient != "user@example.com" {
-		t.Errorf("event.Data.Recipient = %v, want user@example.com", event.Data.Recipient)
-	}
-
-	if event.RawPayload == nil {
-		t.Error("event.RawPayload should not be nil")
-	}
+	return w
 }
 
-func TestVerifyWebhook_WithDeliveryTimestamp(t *testing.T) {
-	payload := `{"id":"wh_123","event":"message.delivered"}`
-	secret := "test-secret"
-	timestamp := time.Now().Unix()
-	signature := generateTestSignature(payload, secret, timestamp)
+func reason(t *testing.T, err error) WebhookVerificationReason {
+	t.Helper()
+	return mustAs[*WebhookVerificationError](t, err).Reason
+}
 
-	// Matching delivery timestamp should work
-	event, err := VerifyWebhook(signature, []byte(payload), timestamp, secret, DefaultWebhookTolerance)
+func TestWebhookVerifiesAndReturnsThePayload(t *testing.T) {
+	w := testWebhook(t)
+	payload, err := w.Verify([]byte(webhookBody), signedHeaders(webhookNow.Unix(), webhookBody))
 	if err != nil {
-		t.Fatalf("VerifyWebhook() error = %v", err)
+		t.Fatal(err)
 	}
-	if event == nil {
-		t.Fatal("VerifyWebhook() returned nil event")
+	if payload.ID != "d1" || payload.Event != WebhookEventMessageDelivered || payload.Timestamp != "2026-01-01T00:00:00Z" || string(payload.Raw) != webhookBody {
+		t.Fatalf("%+v", payload)
 	}
-
-	// Mismatched delivery timestamp should fail
-	_, err = VerifyWebhook(signature, []byte(payload), timestamp+100, secret, DefaultWebhookTolerance)
-	if err == nil {
-		t.Fatal("VerifyWebhook() expected error for mismatched timestamp")
+	var data struct {
+		MessageID string `json:"message_id"`
 	}
-	if !errors.Is(err, ErrInvalidWebhookSignature) {
-		t.Errorf("VerifyWebhook() error should wrap ErrInvalidWebhookSignature, got %v", err)
+	if err := payload.DecodeData(&data); err != nil || data.MessageID != "m1" {
+		t.Fatal(data, err)
 	}
 }
 
-func TestVerifyWebhook_InvalidSignature(t *testing.T) {
-	payload := `{"id":"wh_123","event":"message.delivered"}`
-	secret := "test-secret"
-	timestamp := time.Now().Unix()
-
-	// Wrong signature
-	signature := fmt.Sprintf("t=%d,v1=invalid_hash", timestamp)
-
-	_, err := VerifyWebhook(signature, []byte(payload), 0, secret, DefaultWebhookTolerance)
-	if err == nil {
-		t.Fatal("VerifyWebhook() expected error for invalid signature")
+func TestWebhookTolerance(t *testing.T) {
+	w := testWebhook(t)
+	for _, offset := range []int64{-300, 0, 300} {
+		at := webhookNow.Unix() + offset
+		if _, err := w.Verify([]byte(webhookBody), signedHeaders(at, webhookBody)); err != nil {
+			t.Errorf("%d: %v", offset, err)
+		}
 	}
-
-	if !errors.Is(err, ErrInvalidWebhookSignature) {
-		t.Errorf("VerifyWebhook() error should wrap ErrInvalidWebhookSignature, got %v", err)
+	for _, offset := range []int64{-301, 301} {
+		at := webhookNow.Unix() + offset
+		_, err := w.Verify([]byte(webhookBody), signedHeaders(at, webhookBody))
+		if reason(t, err) != WebhookTimestampOutOfTolerance {
+			t.Error(offset, err)
+		}
 	}
+	strict := testWebhook(t, WithTolerance(0))
+	if _, err := strict.Verify([]byte(webhookBody), signedHeaders(webhookNow.Unix(), webhookBody)); err != nil {
+		t.Fatal(err)
+	}
+	_, err := strict.Verify([]byte(webhookBody), signedHeaders(webhookNow.Unix()-1, webhookBody))
+	if reason(t, err) != WebhookTimestampOutOfTolerance {
+		t.Fatal("zero keeps the check enabled")
+	}
+	if _, err := NewWebhook(webhookSecret, WithTolerance(-time.Second)); err == nil {
+		t.Fatal("negative tolerance")
+	}
+	_, err = NewWebhook("")
+	mustAs[*ConfigError](t, err)
 }
 
-func TestVerifyWebhook_WrongSecret(t *testing.T) {
-	payload := `{"id":"wh_123","event":"message.delivered"}`
-	timestamp := time.Now().Unix()
-	signature := generateTestSignature(payload, "correct-secret", timestamp)
-
-	_, err := VerifyWebhook(signature, []byte(payload), 0, "wrong-secret", DefaultWebhookTolerance)
-	if err == nil {
-		t.Fatal("VerifyWebhook() expected error for wrong secret")
-	}
-
-	if !errors.Is(err, ErrInvalidWebhookSignature) {
-		t.Errorf("VerifyWebhook() error should wrap ErrInvalidWebhookSignature, got %v", err)
-	}
-}
-
-func TestVerifyWebhook_ExpiredTimestamp(t *testing.T) {
-	payload := `{"id":"wh_123","event":"message.delivered"}`
-	secret := "test-secret"
-	// Timestamp from 10 minutes ago
-	timestamp := time.Now().Add(-10 * time.Minute).Unix()
-	signature := generateTestSignature(payload, secret, timestamp)
-
-	_, err := VerifyWebhook(signature, []byte(payload), 0, secret, DefaultWebhookTolerance)
-	if err == nil {
-		t.Fatal("VerifyWebhook() expected error for expired timestamp")
-	}
-
-	if !errors.Is(err, ErrWebhookTimestampExpired) {
-		t.Errorf("VerifyWebhook() error should wrap ErrWebhookTimestampExpired, got %v", err)
-	}
-}
-
-func TestVerifyWebhook_FutureTimestamp(t *testing.T) {
-	payload := `{"id":"wh_123","event":"message.delivered"}`
-	secret := "test-secret"
-	// Timestamp from 10 minutes in the future
-	timestamp := time.Now().Add(10 * time.Minute).Unix()
-	signature := generateTestSignature(payload, secret, timestamp)
-
-	_, err := VerifyWebhook(signature, []byte(payload), 0, secret, DefaultWebhookTolerance)
-	if err == nil {
-		t.Fatal("VerifyWebhook() expected error for future timestamp")
-	}
-
-	if !errors.Is(err, ErrWebhookTimestampExpired) {
-		t.Errorf("VerifyWebhook() error should wrap ErrWebhookTimestampExpired, got %v", err)
-	}
-}
-
-func TestVerifyWebhook_CustomTolerance(t *testing.T) {
-	payload := `{"id":"wh_123","event":"message.delivered"}`
-	secret := "test-secret"
-	// Timestamp from 2 minutes ago
-	timestamp := time.Now().Add(-2 * time.Minute).Unix()
-	signature := generateTestSignature(payload, secret, timestamp)
-
-	// Should fail with 1 minute tolerance
-	_, err := VerifyWebhook(signature, []byte(payload), 0, secret, 1*time.Minute)
-	if err == nil {
-		t.Fatal("VerifyWebhook() expected error with 1 minute tolerance")
-	}
-
-	// Should succeed with 5 minute tolerance
-	event, err := VerifyWebhook(signature, []byte(payload), 0, secret, 5*time.Minute)
-	if err != nil {
-		t.Fatalf("VerifyWebhook() error = %v with 5 minute tolerance", err)
-	}
-	if event == nil {
-		t.Fatal("VerifyWebhook() returned nil event")
-	}
-}
-
-func TestVerifyWebhook_MalformedSignature(t *testing.T) {
-	tests := []struct {
-		name      string
-		signature string
+func TestWebhookRejections(t *testing.T) {
+	w := testWebhook(t)
+	at := webhookNow.Unix()
+	good := sign(webhookSecret, at, webhookBody)
+	cases := map[string]struct {
+		body    string
+		headers http.Header
+		want    WebhookVerificationReason
 	}{
-		{"empty", ""},
-		{"no parts", "invalid"},
-		{"missing hash", "t=1234567890"},
-		{"missing timestamp", "v1=abc123"},
-		{"invalid timestamp", "t=invalid,v1=abc123"},
-		{"wrong format", "timestamp=1234567890,hash=abc123"},
+		"changed body":       {webhookBody + " ", signedHeaders(at, webhookBody), WebhookSignatureMismatch},
+		"wrong secret":       {webhookBody, http.Header{HeaderSignature: {fmt.Sprintf("t=%d,v1=%s", at, sign("whsec_other", at, webhookBody))}, HeaderDelivery: {fmt.Sprint(at)}}, WebhookSignatureMismatch},
+		"prefix stripped":    {webhookBody, http.Header{HeaderSignature: {fmt.Sprintf("t=%d,v1=%s", at, sign(strings.TrimPrefix(webhookSecret, "whsec_"), at, webhookBody))}, HeaderDelivery: {fmt.Sprint(at)}}, WebhookSignatureMismatch},
+		"no signature":       {webhookBody, http.Header{HeaderDelivery: {fmt.Sprint(at)}}, WebhookSignatureHeaderMissing},
+		"empty signature":    {webhookBody, http.Header{HeaderSignature: {" "}, HeaderDelivery: {fmt.Sprint(at)}}, WebhookSignatureHeaderMissing},
+		"two signatures":     {webhookBody, http.Header{HeaderSignature: {"t=1,v1=" + good, "t=1,v1=" + good}, HeaderDelivery: {fmt.Sprint(at)}}, WebhookSignatureHeaderMalformed},
+		"no delivery":        {webhookBody, http.Header{HeaderSignature: {fmt.Sprintf("t=%d,v1=%s", at, good)}}, WebhookDeliveryHeaderMissing},
+		"delivery mismatch":  {webhookBody, http.Header{HeaderSignature: {fmt.Sprintf("t=%d,v1=%s", at, good)}, HeaderDelivery: {fmt.Sprint(at + 1)}}, WebhookDeliveryTimestampMismatch},
+		"empty delivery":     {webhookBody, http.Header{HeaderSignature: {fmt.Sprintf("t=%d,v1=%s", at, good)}, HeaderDelivery: {""}}, WebhookDeliveryTimestampMismatch},
+		"two deliveries":     {webhookBody, http.Header{HeaderSignature: {fmt.Sprintf("t=%d,v1=%s", at, good)}, HeaderDelivery: {fmt.Sprint(at), fmt.Sprint(at)}}, WebhookDeliveryTimestampMismatch},
+		"duplicate t":        {webhookBody, http.Header{HeaderSignature: {fmt.Sprintf("t=%d,t=%d,v1=%s", at, at, good)}, HeaderDelivery: {fmt.Sprint(at)}}, WebhookSignatureHeaderMalformed},
+		"missing t":          {webhookBody, http.Header{HeaderSignature: {"v1=" + good}, HeaderDelivery: {fmt.Sprint(at)}}, WebhookSignatureHeaderMalformed},
+		"missing v1":         {webhookBody, http.Header{HeaderSignature: {fmt.Sprintf("t=%d", at)}, HeaderDelivery: {fmt.Sprint(at)}}, WebhookSignatureHeaderMalformed},
+		"short v1":           {webhookBody, http.Header{HeaderSignature: {fmt.Sprintf("t=%d,v1=abc", at)}, HeaderDelivery: {fmt.Sprint(at)}}, WebhookSignatureHeaderMalformed},
+		"non-numeric t":      {webhookBody, http.Header{HeaderSignature: {"t=abc,v1=" + good}, HeaderDelivery: {"abc"}}, WebhookSignatureHeaderMalformed},
+		"negative t":         {webhookBody, http.Header{HeaderSignature: {"t=-1,v1=" + good}, HeaderDelivery: {"-1"}}, WebhookSignatureHeaderMalformed},
+		"huge t":             {webhookBody, http.Header{HeaderSignature: {"t=99999999999999999999,v1=" + good}, HeaderDelivery: {"1"}}, WebhookSignatureHeaderMalformed},
+		"non-ASCII":          {webhookBody, http.Header{HeaderSignature: {fmt.Sprintf("t=%d,v1=%sé", at, good[:63])}, HeaderDelivery: {fmt.Sprint(at)}}, WebhookSignatureHeaderMalformed},
+		"full-width digits":  {webhookBody, http.Header{HeaderSignature: {"t=１７６７２２５５７０,v1=" + good}, HeaderDelivery: {fmt.Sprint(at)}}, WebhookSignatureHeaderMalformed},
+		"control characters": {webhookBody, http.Header{HeaderSignature: {fmt.Sprintf("t=%d,\x00v1=%s", at, good)}, HeaderDelivery: {fmt.Sprint(at)}}, WebhookSignatureHeaderMalformed},
+		"empty body":         {"", signedHeaders(at, ""), WebhookBodyInvalid},
+		"not JSON":           {"not json", signedHeaders(at, "not json"), WebhookPayloadInvalid},
+		"JSON array":         {"[1]", signedHeaders(at, "[1]"), WebhookPayloadInvalid},
+		"wrong field types":  {`{"id":1}`, signedHeaders(at, `{"id":1}`), WebhookPayloadInvalid},
 	}
-
-	payload := `{"id":"wh_123"}`
-	secret := "test-secret"
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			_, err := VerifyWebhook(tt.signature, []byte(payload), 0, secret, DefaultWebhookTolerance)
-			if err == nil {
-				t.Fatal("VerifyWebhook() expected error for malformed signature")
-			}
-
-			if !errors.Is(err, ErrInvalidWebhookSignature) {
-				t.Errorf("VerifyWebhook() error should wrap ErrInvalidWebhookSignature, got %v", err)
-			}
-		})
-	}
-}
-
-func TestVerifyWebhook_EmptySecret(t *testing.T) {
-	payload := `{"id":"wh_123"}`
-	timestamp := time.Now().Unix()
-	signature := fmt.Sprintf("t=%d,v1=abc123", timestamp)
-
-	_, err := VerifyWebhook(signature, []byte(payload), 0, "", DefaultWebhookTolerance)
-	if err == nil {
-		t.Fatal("VerifyWebhook() expected error for empty secret")
-	}
-
-	if !errors.Is(err, ErrInvalidWebhookSignature) {
-		t.Errorf("VerifyWebhook() error should wrap ErrInvalidWebhookSignature, got %v", err)
+	for label, c := range cases {
+		_, err := w.Verify([]byte(c.body), c.headers)
+		if got := reason(t, err); got != c.want {
+			t.Errorf("%s: %s, want %s (%v)", label, got, c.want, err)
+		}
 	}
 }
 
-func TestVerifyWebhook_InvalidJSON(t *testing.T) {
-	payload := `invalid json`
-	secret := "test-secret"
-	timestamp := time.Now().Unix()
-	signature := generateTestSignature(payload, secret, timestamp)
-
-	_, err := VerifyWebhook(signature, []byte(payload), 0, secret, DefaultWebhookTolerance)
-	if err == nil {
-		t.Fatal("VerifyWebhook() expected error for invalid JSON")
+func TestWebhookSignatureVariants(t *testing.T) {
+	w := testWebhook(t)
+	at := webhookNow.Unix()
+	good := sign(webhookSecret, at, webhookBody)
+	other := strings.Repeat("0", 64)
+	for _, header := range []string{
+		fmt.Sprintf("t=%d,v1=%s,v1=%s", at, good, other),
+		fmt.Sprintf("t=%d,v1=%s,v1=%s", at, other, good),
+		fmt.Sprintf("t=%d,v1=%s,v2=%s", at, good, other),
+		fmt.Sprintf(" t=%d , v1=%s ", at, strings.ToUpper(good)),
+		fmt.Sprintf("v1=%s,t=%d,junk", good, at),
+	} {
+		if _, err := w.VerifySignature([]byte(webhookBody), header, fmt.Sprint(at)); err != nil {
+			t.Errorf("%s: %v", header, err)
+		}
 	}
-
-	// Should not be a signature error, but a parsing error
-	if errors.Is(err, ErrInvalidWebhookSignature) {
-		t.Error("VerifyWebhook() error should not be ErrInvalidWebhookSignature for JSON error")
+	// VerifySignature checks the delivery timestamp only when it is given.
+	header := fmt.Sprintf("t=%d,v1=%s", at, good)
+	if _, err := w.VerifySignature([]byte(webhookBody), header, ""); err != nil {
+		t.Fatal(err)
+	}
+	_, err := w.VerifySignature([]byte(webhookBody), header, fmt.Sprint(at+1))
+	if reason(t, err) != WebhookDeliveryTimestampMismatch {
+		t.Fatal(err)
 	}
 }
 
-func TestVerifyWebhookFromRequest_Success(t *testing.T) {
-	payload := `{"id":"wh_123","event":"message.delivered","data":{"message_id":"msg_123"}}`
-	secret := "test-secret"
-	timestamp := time.Now().Unix()
-	signature := generateTestSignature(payload, secret, timestamp)
+func TestWebhookReadsHeadersCaseInsensitively(t *testing.T) {
+	w := testWebhook(t)
+	at := webhookNow.Unix()
+	headers := http.Header{
+		"x-lettermint-signature": {fmt.Sprintf("t=%d,v1=%s", at, sign(webhookSecret, at, webhookBody))},
+		"X-LETTERMINT-DELIVERY":  {fmt.Sprint(at)},
+	}
+	if _, err := w.Verify([]byte(webhookBody), headers); err != nil {
+		t.Fatal(err)
+	}
+}
 
-	req := httptest.NewRequest(http.MethodPost, "/webhook", strings.NewReader(payload))
-	req.Header.Set(HeaderSignature, signature)
-	req.Header.Set(HeaderDelivery, fmt.Sprintf("%d", timestamp))
+func TestWebhookVerifyRequest(t *testing.T) {
+	w := testWebhook(t)
+	request := httptest.NewRequest("POST", "/webhooks/lettermint", strings.NewReader(webhookBody))
+	for key, values := range signedHeaders(webhookNow.Unix(), webhookBody) {
+		request.Header[key] = values
+	}
+	if _, err := w.VerifyRequest(request); err != nil {
+		t.Fatal(err)
+	}
+	again := new(strings.Builder)
+	if _, err := fmt.Fprint(again, readAll(t, request)); err != nil || again.String() != webhookBody {
+		t.Fatal("the body can be read again")
+	}
+	small := testWebhook(t, WithMaxBodyBytes(10))
+	request = httptest.NewRequest("POST", "/", strings.NewReader(webhookBody))
+	_, err := small.VerifyRequest(request)
+	if reason(t, err) != WebhookBodyInvalid {
+		t.Fatal(err)
+	}
+}
 
-	event, err := VerifyWebhookFromRequest(req, secret, DefaultWebhookTolerance)
+func readAll(t *testing.T, r *http.Request) string {
+	t.Helper()
+	var builder strings.Builder
+	buffer := make([]byte, 512)
+	for {
+		n, err := r.Body.Read(buffer)
+		builder.Write(buffer[:n])
+		if err != nil {
+			return builder.String()
+		}
+	}
+}
+
+func TestWebhookNeverShowsTheSecret(t *testing.T) {
+	w := testWebhook(t)
+	assertNoSecret(t, "webhook", w, webhookSecret)
+	assertNoSecret(t, "webhook value", *w, webhookSecret)
+	_, err := w.Verify([]byte("{}"), http.Header{HeaderSignature: {"t=1,v1=" + strings.Repeat("0", 64)}, HeaderDelivery: {"1"}})
+	assertNoSecret(t, "error", err, webhookSecret)
+	if fmt.Sprint(w) != "lettermint.Webhook{Tolerance: 5m0s, Secret: [redacted]}" {
+		t.Fatal(fmt.Sprint(w))
+	}
+}
+
+// The conformance suite's webhook vectors (testdata/webhooks.json, a copy of
+// conformance/webhooks.json in lettermint/sdk-generator).
+func TestConformanceWebhookVectors(t *testing.T) {
+	data, err := os.ReadFile("testdata/webhooks.json")
 	if err != nil {
-		t.Fatalf("VerifyWebhookFromRequest() error = %v", err)
+		t.Fatal(err)
 	}
-
-	if event == nil {
-		t.Fatal("VerifyWebhookFromRequest() returned nil event")
+	var suite struct {
+		Vectors []struct {
+			ID         string            `json:"id"`
+			Secret     string            `json:"secret"`
+			Headers    map[string]string `json:"headers"`
+			BodyBase64 string            `json:"body_base64"`
+			Now        int64             `json:"now"`
+			Tolerance  int64             `json:"tolerance"`
+			Expect     string            `json:"expect"`
+			Reason     string            `json:"reason"`
+		} `json:"vectors"`
 	}
-
-	if event.ID != "wh_123" {
-		t.Errorf("event.ID = %v, want wh_123", event.ID)
+	if err := json.Unmarshal(data, &suite); err != nil {
+		t.Fatal(err)
 	}
-}
-
-func TestVerifyWebhookFromRequest_AcceptsBodyLargerThanOneMiB(t *testing.T) {
-	payload := fmt.Sprintf(
-		`{"id":"wh_123","event":"message.delivered","data":{"message_id":"%s"}}`,
-		strings.Repeat("a", 1<<20),
-	)
-	secret := "test-secret"
-	timestamp := time.Now().Unix()
-	signature := generateTestSignature(payload, secret, timestamp)
-
-	req := httptest.NewRequest(http.MethodPost, "/webhook", strings.NewReader(payload))
-	req.Header.Set(HeaderSignature, signature)
-	req.Header.Set(HeaderDelivery, fmt.Sprintf("%d", timestamp))
-
-	event, err := VerifyWebhookFromRequest(req, secret, DefaultWebhookTolerance)
-	if err != nil {
-		t.Fatalf("VerifyWebhookFromRequest() error = %v", err)
+	if len(suite.Vectors) != 25 {
+		t.Fatalf("%d vectors", len(suite.Vectors))
 	}
-
-	if event.Data.MessageID != strings.Repeat("a", 1<<20) {
-		t.Fatal("VerifyWebhookFromRequest() did not preserve oversized message_id")
-	}
-}
-
-func TestVerifyWebhookFromRequestWithMaxBodyBytes_RejectsBodyLargerThanLimit(t *testing.T) {
-	const maxBodyBytes int64 = 32
-
-	payload := `{"id":"wh_123","event":"message.delivered","data":{"message_id":"msg_123"}}`
-	secret := "test-secret"
-	timestamp := time.Now().Unix()
-	signature := generateTestSignature(payload, secret, timestamp)
-
-	req := httptest.NewRequest(http.MethodPost, "/webhook", strings.NewReader(payload))
-	req.Header.Set(HeaderSignature, signature)
-	req.Header.Set(HeaderDelivery, fmt.Sprintf("%d", timestamp))
-
-	_, err := VerifyWebhookFromRequestWithMaxBodyBytes(req, secret, DefaultWebhookTolerance, maxBodyBytes)
-	if err == nil {
-		t.Fatal("VerifyWebhookFromRequest() expected error for oversized body")
-	}
-
-	var maxBytesErr *http.MaxBytesError
-	if !errors.As(err, &maxBytesErr) {
-		t.Fatalf("VerifyWebhookFromRequest() error should wrap *http.MaxBytesError, got %v", err)
-	}
-
-	if maxBytesErr.Limit != maxBodyBytes {
-		t.Errorf("MaxBytesError.Limit = %v, want %v", maxBytesErr.Limit, maxBodyBytes)
-	}
-}
-
-func TestVerifyWebhookFromRequest_MissingSignatureHeader(t *testing.T) {
-	req := httptest.NewRequest(http.MethodPost, "/webhook", strings.NewReader(`{"id":"wh_123"}`))
-	// No signature header
-
-	_, err := VerifyWebhookFromRequest(req, "test-secret", DefaultWebhookTolerance)
-	if err == nil {
-		t.Fatal("VerifyWebhookFromRequest() expected error for missing signature header")
-	}
-
-	if !errors.Is(err, ErrInvalidWebhookSignature) {
-		t.Errorf("VerifyWebhookFromRequest() error should wrap ErrInvalidWebhookSignature, got %v", err)
-	}
-}
-
-func TestVerifyWebhookFromRequest_InvalidDeliveryHeader(t *testing.T) {
-	payload := `{"id":"wh_123"}`
-	secret := "test-secret"
-	timestamp := time.Now().Unix()
-	signature := generateTestSignature(payload, secret, timestamp)
-
-	req := httptest.NewRequest(http.MethodPost, "/webhook", strings.NewReader(payload))
-	req.Header.Set(HeaderSignature, signature)
-	req.Header.Set(HeaderDelivery, "not-a-number")
-
-	_, err := VerifyWebhookFromRequest(req, secret, DefaultWebhookTolerance)
-	if err == nil {
-		t.Fatal("VerifyWebhookFromRequest() expected error for invalid delivery header")
-	}
-
-	if !errors.Is(err, ErrInvalidWebhookSignature) {
-		t.Errorf("VerifyWebhookFromRequest() error should wrap ErrInvalidWebhookSignature, got %v", err)
-	}
-}
-
-func TestVerifyWebhookFromRequest_BodyReadError(t *testing.T) {
-	secret := "test-secret"
-	timestamp := time.Now().Unix()
-	signature := fmt.Sprintf("t=%d,v1=abc123", timestamp)
-
-	// Create a request with a body that will error on read
-	req := httptest.NewRequest(http.MethodPost, "/webhook", &errorReader{})
-	req.Header.Set(HeaderSignature, signature)
-
-	_, err := VerifyWebhookFromRequest(req, secret, DefaultWebhookTolerance)
-	if err == nil {
-		t.Fatal("VerifyWebhookFromRequest() expected error for body read error")
-	}
-}
-
-// errorReader is a reader that always returns an error
-type errorReader struct{}
-
-func (e *errorReader) Read(p []byte) (n int, err error) {
-	return 0, io.ErrUnexpectedEOF
-}
-
-func TestSecureCompare(t *testing.T) {
-	tests := []struct {
-		name string
-		a    string
-		b    string
-		want bool
-	}{
-		{"equal strings", "abc123", "abc123", true},
-		{"different strings", "abc123", "abc456", false},
-		{"different lengths", "abc", "abcdef", false},
-		{"empty strings", "", "", true},
-		{"one empty", "abc", "", false},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := secureCompare(tt.a, tt.b); got != tt.want {
-				t.Errorf("secureCompare() = %v, want %v", got, tt.want)
+	for _, vector := range suite.Vectors {
+		t.Run(vector.ID, func(t *testing.T) {
+			body, _ := base64.StdEncoding.DecodeString(vector.BodyBase64)
+			headers := http.Header{}
+			for key, value := range vector.Headers {
+				headers[key] = []string{value}
+			}
+			w, err := NewWebhook(vector.Secret, WithTolerance(time.Duration(vector.Tolerance)*time.Second), WithClock(func() time.Time { return time.Unix(vector.Now, 0) }))
+			if err != nil {
+				t.Fatal(err)
+			}
+			_, err = w.Verify(body, headers)
+			if vector.Expect == "valid" {
+				if err != nil {
+					t.Fatal(err)
+				}
+				return
+			}
+			if got := reason(t, err); string(got) != vector.Reason {
+				t.Fatalf("%s, want %s", got, vector.Reason)
 			}
 		})
 	}
