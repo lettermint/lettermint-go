@@ -244,7 +244,7 @@ Results are pointers to the generated types (`*DomainData`), lists are `*CursorP
 | `api.Messages.Source` / `HTML` / `Text(ctx, id)` | unchanged, on `client.Messages` |
 | `api.Messages.Reschedule(ctx, id, payload)` | `client.Messages.Reschedule(ctx, id, RescheduleMessageRequest)` |
 | `api.Messages.Cancel(ctx, id)` | `client.Messages.Cancel(ctx, id)` |
-| `api.Messages.Process(ctx, id)` | `client.Messages.Process(ctx, id, lettermint.WithIdempotencyKey(…)?)` |
+| `api.Messages.Process(ctx, id)` | `client.Messages.Process(ctx, id)`, optionally with `lettermint.WithIdempotencyKey(key)` |
 | `api.Projects.List(ctx, query)` | `client.Projects.List(ctx, *ListProjectsQuery)`, `client.Projects.Iterate(…)` |
 | `api.Projects.Create(ctx, payload)` | `client.Projects.Create(ctx, StoreProjectData)` |
 | `api.Projects.Retrieve(ctx, id)` | `client.Projects.Retrieve(ctx, id, *GetProjectQuery)` |
