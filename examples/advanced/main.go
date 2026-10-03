@@ -1,126 +1,69 @@
-// Example: Advanced email sending with Lettermint
-//
-// This example demonstrates advanced email features including:
-// - HTML and text bodies
-// - CC and BCC recipients
-// - File attachments (including inline images)
-// - Custom metadata and tags
-// - Idempotency keys
-// - Custom timeouts
+// Example: builder templates, attachments, tags, idempotency and errors.
 //
 // Usage:
 //
-//	export LETTERMINT_API_TOKEN="your-api-token"
-//	go run main.go
+//	export LETTERMINT_PROJECT_TOKEN="lm_..."
+//	go run ./examples/advanced
 package main
 
 import (
 	"context"
-	"encoding/base64"
 	"errors"
 	"fmt"
 	"log"
 	"os"
 	"time"
 
-	lettermint "github.com/lettermint/lettermint-go/v2"
+	lettermint "github.com/lettermint/lettermint-go/v3"
 )
 
 func main() {
-	apiToken := os.Getenv("LETTERMINT_API_TOKEN")
-	if apiToken == "" {
-		log.Fatal("LETTERMINT_API_TOKEN environment variable is required")
-	}
-
-	// Create client with custom timeout
-	client, err := lettermint.New(apiToken,
-		lettermint.WithTimeout(60*time.Second),
+	client, err := lettermint.New(
+		lettermint.WithSendingToken(os.Getenv("LETTERMINT_PROJECT_TOKEN")),
+		lettermint.WithTimeout(10*time.Second),
 	)
 	if err != nil {
-		log.Fatalf("Failed to create client: %v", err)
+		log.Fatal(err)
 	}
+	ctx := context.Background()
 
-	// Create a context with timeout for this specific request
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
+	// A builder is a value: keep a base and derive one email per recipient.
+	invoice := client.Emails.Compose().
+		From("Acme Billing <billing@acme.com>").
+		Subject("Your invoice").
+		Tags(lettermint.MessageTagInput{Name: "category", Value: "invoice"}).
+		Metadata(map[string]string{"source": "example"})
 
-	// Sample attachment content (in real usage, read from file)
-	attachmentContent := base64.StdEncoding.EncodeToString([]byte("Hello, this is a text file attachment!"))
+	pdf := []byte("%PDF-1.4 ...")
+	resp, err := invoice.
+		To("jane@example.com").
+		CC("accounts@example.com").
+		HTML(`<p>Your invoice is attached.</p><img src="cid:logo">`).
+		Attach(lettermint.Attachment{Filename: "invoice.pdf", Content: pdf, ContentType: "application/pdf"}).
+		Attach(lettermint.Attachment{Filename: "logo.png", ContentBase64: "iVBORw0KGgo=", ContentID: "logo"}).
+		Send(ctx, lettermint.WithIdempotencyKey("invoice-2026-10-jane"))
 
-	// Sample inline image (1x1 red pixel PNG)
-	inlineImageContent := base64.StdEncoding.EncodeToString([]byte{
-		0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00, 0x0D,
-		0x49, 0x48, 0x44, 0x52, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01,
-		0x08, 0x02, 0x00, 0x00, 0x00, 0x90, 0x77, 0x53, 0xDE, 0x00, 0x00, 0x00,
-		0x0C, 0x49, 0x44, 0x41, 0x54, 0x08, 0xD7, 0x63, 0xF8, 0xCF, 0xC0, 0x00,
-		0x00, 0x00, 0x03, 0x00, 0x01, 0x00, 0x05, 0xFE, 0xD4, 0xEF, 0x00, 0x00,
-		0x00, 0x00, 0x49, 0x45, 0x4E, 0x44, 0xAE, 0x42, 0x60, 0x82,
-	})
+	var validation *lettermint.ValidationError
+	var rateLimit *lettermint.RateLimitError
+	var timeout *lettermint.TimeoutError
+	switch {
+	case errors.As(err, &validation):
+		log.Fatalf("rejected: %s %v", validation.Message, validation.Errors)
+	case errors.As(err, &rateLimit):
+		log.Fatalf("rate limited, retry after %v with the same idempotency key", rateLimit.RetryAfter)
+	case errors.As(err, &timeout):
+		log.Fatal("the outcome is unknown; retry with the same idempotency key")
+	case err != nil:
+		log.Fatal(err)
+	}
+	fmt.Println("sent", resp.MessageID)
 
-	// Send a full-featured email
-	resp, err := client.Email(ctx).
-		// Sender with display name (RFC 5322 format)
-		From("John Doe <john@example.com>").
-		// Multiple recipients
-		To("recipient1@example.com", "recipient2@example.com").
-		CC("manager@example.com").
-		BCC("archive@example.com").
-		ReplyTo("support@example.com").
-		// Subject and body
-		Subject("Monthly Report - December 2024").
-		HTML(`
-			<h1>Monthly Report</h1>
-			<p>Please find the attached report for December 2024.</p>
-			<p>Here's an inline image: <img src="cid:logo" alt="Logo"></p>
-			<p>Best regards,<br>John Doe</p>
-		`).
-		Text("Monthly Report\n\nPlease find the attached report for December 2024.\n\nBest regards,\nJohn Doe").
-		// Custom headers
-		Header("X-Campaign-ID", "dec-2024-report").
-		// Attachments
-		Attach("report.txt", attachmentContent).
-		AttachWithContentID("logo.png", inlineImageContent, "logo").
-		// Metadata (included in webhooks)
-		Metadata(map[string]string{
-			"user_id":     "12345",
-			"campaign_id": "dec-2024",
-		}).
-		MetadataValue("department", "sales").
-		// Tag for categorization
-		Tag("monthly-report").
-		// Typed reusable name/value tags
-		MessageTags(lettermint.MessageTag{Name: "campaign", Value: "monthly-report"}).
-		// Route (optional, for custom sending configuration)
-		Route("transactional").
-		// Idempotency key to prevent duplicate sends
-		IdempotencyKey("report-dec-2024-12345").
-		Send()
-
+	// Schedule an email and cancel it again.
+	scheduled, err := invoice.To("john@example.com").Text("Reminder").ScheduledAtTime(time.Now().Add(24 * time.Hour)).Send(ctx)
 	if err != nil {
-		// Handle specific error types
-		var apiErr *lettermint.APIError
-		if errors.As(err, &apiErr) {
-			fmt.Printf("API Error (%d): %s\n", apiErr.StatusCode, apiErr.Message)
-			if len(apiErr.Errors) > 0 {
-				fmt.Printf("Validation errors: %v\n", apiErr.Errors)
-			}
-		}
-
-		// Check for specific error categories
-		if errors.Is(err, lettermint.ErrValidation) {
-			fmt.Println("Validation failed - check your email parameters")
-		} else if errors.Is(err, lettermint.ErrUnauthorized) {
-			fmt.Println("Authentication failed - check your API token")
-		} else if errors.Is(err, lettermint.ErrTimeout) {
-			fmt.Println("Request timed out - try again later")
-		} else if errors.Is(err, lettermint.ErrRateLimited) {
-			fmt.Println("Rate limited - slow down your requests")
-		}
-
-		log.Fatalf("Failed to send email: %v", err)
+		log.Fatal(err)
 	}
-
-	fmt.Printf("Email sent successfully!\n")
-	fmt.Printf("Message ID: %s\n", resp.MessageID)
-	fmt.Printf("Status: %s\n", resp.Status)
+	if _, err := client.Messages.Cancel(ctx, scheduled.MessageID); err != nil {
+		log.Fatal(err)
+	}
 }

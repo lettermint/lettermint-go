@@ -1,12 +1,9 @@
-// Example: Basic email sending with Lettermint
-//
-// This example demonstrates the simplest way to send an email using the Lettermint SDK.
-// Set the LETTERMINT_API_TOKEN environment variable before running.
+// Example: send one email with the Lettermint Go SDK.
 //
 // Usage:
 //
-//	export LETTERMINT_API_TOKEN="your-api-token"
-//	go run main.go
+//	export LETTERMINT_PROJECT_TOKEN="lm_..."
+//	go run ./examples/basic
 package main
 
 import (
@@ -15,36 +12,24 @@ import (
 	"log"
 	"os"
 
-	lettermint "github.com/lettermint/lettermint-go/v2"
+	lettermint "github.com/lettermint/lettermint-go/v3"
 )
 
 func main() {
-	// Get API token from environment variable
-	apiToken := os.Getenv("LETTERMINT_API_TOKEN")
-	if apiToken == "" {
-		log.Fatal("LETTERMINT_API_TOKEN environment variable is required")
-	}
-
-	// Create a new Lettermint client
-	client, err := lettermint.New(apiToken)
+	client, err := lettermint.New(lettermint.WithSendingToken(os.Getenv("LETTERMINT_PROJECT_TOKEN")))
 	if err != nil {
-		log.Fatalf("Failed to create client: %v", err)
+		log.Fatal(err)
 	}
 
-	// Send an email using the fluent builder interface
-	ctx := context.Background()
-	resp, err := client.Email(ctx).
-		From("sender@example.com").
-		To("recipient@example.com").
-		Subject("Hello from Lettermint Go SDK").
-		Text("This is a test email sent using the Lettermint Go SDK.").
-		Send()
-
+	resp, err := client.Emails.Compose().
+		From("Acme <hello@acme.com>").
+		To("jane@example.com").
+		Subject("Welcome to Acme").
+		HTML("<p>Thanks for signing up.</p>").
+		Text("Thanks for signing up.").
+		Send(context.Background())
 	if err != nil {
-		log.Fatalf("Failed to send email: %v", err)
+		log.Fatal(err)
 	}
-
-	fmt.Printf("Email sent successfully!\n")
-	fmt.Printf("Message ID: %s\n", resp.MessageID)
-	fmt.Printf("Status: %s\n", resp.Status)
+	fmt.Println(resp.MessageID, resp.Status)
 }
