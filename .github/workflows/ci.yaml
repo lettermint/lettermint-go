@@ -10,13 +10,19 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: read
+
 jobs:
   test:
     name: Test (Go ${{ matrix.go-version }})
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
-        go-version: ['1.21', '1.22', '1.23']
+        # 1.24 is the minimum (go.mod): iter.Seq2 iterators and the omitzero
+        # JSON tag. oldstable and stable are the supported Go releases.
+        go-version: ['1.24', 'oldstable', 'stable']
 
     steps:
       - name: Checkout code
@@ -27,24 +33,31 @@ jobs:
         with:
           go-version: ${{ matrix.go-version }}
 
+      - name: Check formatting
+        run: test -z "$(gofmt -l .)" || (gofmt -l . && exit 1)
+
       - name: Run go vet
         run: go vet ./...
+
+      - name: Check the generated files
+        run: sh scripts/generate.sh --check
 
       - name: Run tests
         run: go test -race -coverprofile=coverage.out ./...
 
+      - name: Build the examples
+        run: go build ./...
+
       - name: Upload coverage to Codecov
-        if: matrix.go-version == '1.23'
+        if: matrix.go-version == 'stable'
         uses: codecov/codecov-action@v7
         with:
           file: ./coverage.out
           fail_ci_if_error: false
 
-  build:
-    name: Build
+  tidy:
+    name: go mod tidy
     runs-on: ubuntu-latest
-    needs: test
-
     steps:
       - name: Checkout code
         uses: actions/checkout@v7
@@ -52,10 +65,7 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v7
         with:
-          go-version: '1.23'
-
-      - name: Build package
-        run: go build ./...
+          go-version: stable
 
       - name: Check go mod tidy
         run: |

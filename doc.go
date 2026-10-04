@@ -1,96 +1,64 @@
-// Package lettermint provides the official Go SDK for the Lettermint email API.
+// Package lettermint is the official Go SDK for Lettermint (https://lettermint.co).
 //
-// # Getting Started
+// Create one client and share it:
 //
-// Create a client with your API token:
-//
-//	client, err := lettermint.New("your-api-token")
-//	if err != nil {
-//	    log.Fatal(err)
-//	}
-//
-// # Sending Emails
-//
-// Use the fluent builder interface to compose and send emails:
-//
-//	ctx := context.Background()
-//	resp, err := client.Email(ctx).
-//	    From("sender@example.com").
-//	    To("recipient@example.com").
-//	    Subject("Hello from Lettermint").
-//	    HTML("<p>Hello World</p>").
-//	    Send()
-//
-// The builder supports all email features including CC, BCC, attachments,
-// metadata, tags, and idempotency keys:
-//
-//	resp, err := client.Email(ctx).
-//	    From("John Doe <john@example.com>").
-//	    To("user@example.com").
-//	    CC("manager@example.com").
-//	    Subject("Monthly Report").
-//	    HTML("<h1>Report</h1>").
-//	    Text("Report (plain text)").
-//	    Attach("report.pdf", base64Content).
-//	    MetadataValue("user_id", "12345").
-//	    Tag("monthly-report").
-//	    IdempotencyKey("report-dec-2024").
-//	    Send()
-//
-// # Client Configuration
-//
-// Use functional options to customize the client:
-//
-//	client, err := lettermint.New("your-api-token",
-//	    lettermint.WithTimeout(60*time.Second),
-//	    lettermint.WithBaseURL("https://custom-api.example.com"),
+//	client, err := lettermint.New(
+//		lettermint.WithSendingToken(os.Getenv("LETTERMINT_PROJECT_TOKEN")), // for client.Emails
+//		lettermint.WithTeamToken(os.Getenv("LETTERMINT_TEAM_TOKEN")),       // for the Team API
 //	)
 //
-// # Error Handling
+// NewFromToken creates a client from one token and detects its type by the
+// prefix (lm_team_ or lm_).
 //
-// The SDK provides structured errors for easy handling:
+// # Sending email
 //
-//	resp, err := client.Email(ctx).From("...").To("...").Subject("...").HTML("...").Send()
-//	if err != nil {
-//	    // Check for specific error types
-//	    var apiErr *lettermint.APIError
-//	    if errors.As(err, &apiErr) {
-//	        fmt.Printf("API error %d: %s\n", apiErr.StatusCode, apiErr.Message)
-//	    }
+// client.Emails.Compose returns an EmailBuilder. The builder is a value: each
+// setter returns a new builder, so a builder can be reused as a template.
 //
-//	    // Check for error categories
-//	    if errors.Is(err, lettermint.ErrValidation) {
-//	        // Handle validation errors
-//	    }
+//	resp, err := client.Emails.Compose().
+//		From("Acme <hello@acme.com>").
+//		To("jane@example.com").
+//		Subject("Welcome").
+//		HTML("<p>Thanks for signing up.</p>").
+//		Send(ctx, lettermint.WithIdempotencyKey("welcome-jane"))
+//
+// client.Emails.Send and client.Emails.SendBatch take messages in the API's
+// format (SendMailRequest).
+//
+// # Team API
+//
+// The other parts of the client (Domains, Messages, Projects, Routes, Stats,
+// Suppressions, Team, Webhooks) use the team token. Lists return one
+// CursorPage; Iterate methods follow next_cursor:
+//
+//	for domain, err := range client.Domains.Iterate(ctx, nil) {
+//		if err != nil {
+//			return err
+//		}
+//		fmt.Println(domain.Domain)
 //	}
 //
-// # Webhook Verification
+// # Errors
 //
-// Verify webhook signatures to ensure authenticity:
+// Every SDK error implements Error. Check concrete types with errors.As:
+// *APIError (and *AuthenticationError, *PermissionError, *NotFoundError,
+// *ConflictError, *ValidationError, *RateLimitError, *ServerError, which
+// unwrap to it), *TimeoutError, *ConnectionError, *UnexpectedResponseError,
+// *RedirectError, *ConfigError, *ClientValidationError and
+// *WebhookVerificationError. A cancelled or expired context returns the
+// context's error.
 //
-//	func webhookHandler(w http.ResponseWriter, r *http.Request) {
-//	    event, err := lettermint.VerifyWebhookFromRequest(
-//	        r,
-//	        "your-webhook-secret",
-//	        lettermint.DefaultWebhookTolerance,
-//	    )
-//	    if err != nil {
-//	        http.Error(w, "Invalid signature", http.StatusUnauthorized)
-//	        return
-//	    }
+// # Webhooks
 //
-//	    // Process event
-//	    switch event.Event {
-//	    case "message.delivered":
-//	        // Handle delivery
-//	    case "message.bounced":
-//	        // Handle bounce
-//	    }
-//	}
+//	webhook, err := lettermint.NewWebhook(os.Getenv("LETTERMINT_WEBHOOK_SECRET"))
+//	event, err := webhook.VerifyRequest(r) // or webhook.Verify(rawBody, r.Header)
 //
-// VerifyWebhookFromRequest limits request bodies to DefaultWebhookMaxBodyBytes.
-// Use VerifyWebhookFromRequestWithMaxBodyBytes when your application needs to
-// pass a value from environment or config.
+// # Generated code
 //
-// For more information, visit https://docs.lettermint.co
+// generated_types.go and generated_operations.go are generated from the
+// Lettermint API specification by the SDK generator; do not edit them.
+// Optional fields are pointers, optional fields that may also be null are
+// Nullable values (Value, Null), and enums are open string types.
 package lettermint
+
+//go:generate sh scripts/generate.sh
