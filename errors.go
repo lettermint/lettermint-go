@@ -127,7 +127,12 @@ type RateLimitError struct {
 func (e *RateLimitError) Unwrap() error { return &e.APIError }
 
 // ServerError is HTTP 5xx with a JSON or empty body.
-type ServerError struct{ APIError }
+type ServerError struct {
+	APIError
+	// RetryAfter is how long to wait, from the Retry-After header (seconds or an
+	// HTTP date). It is nil when the API did not send a usable value.
+	RetryAfter *time.Duration
+}
 
 // Unwrap returns the *APIError, so errors.As(err, &apiErr) matches.
 func (e *ServerError) Unwrap() error { return &e.APIError }
