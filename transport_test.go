@@ -124,6 +124,22 @@ func TestRetryAfter(t *testing.T) {
 	if len(fake.all()) != 1 {
 		t.Fatal("the SDK never retries")
 	}
+
+	// A 5xx response can carry Retry-After too.
+	client, _ = newTestClient(t, func(recorded, int) *http.Response {
+		return jsonResponse(503, map[string]any{"message": "Service Unavailable"}, "Retry-After", "2")
+	})
+	_, err = client.Emails.Send(context.Background(), minimal())
+	if server := mustAs[*ServerError](t, err); server.RetryAfter == nil || *server.RetryAfter != 2*time.Second {
+		t.Fatal(server.RetryAfter)
+	}
+	client, _ = newTestClient(t, func(recorded, int) *http.Response {
+		return jsonResponse(500, map[string]any{"message": "Server Error"})
+	})
+	_, err = client.Emails.Send(context.Background(), minimal())
+	if server := mustAs[*ServerError](t, err); server.RetryAfter != nil {
+		t.Fatal(*server.RetryAfter)
+	}
 }
 
 func TestUnexpectedResponses(t *testing.T) {
