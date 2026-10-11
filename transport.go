@@ -402,7 +402,7 @@ func apiError(resp *http.Response, data []byte) error {
 	case status == http.StatusTooManyRequests:
 		return &RateLimitError{APIError: base, RetryAfter: parseRetryAfter(resp.Header.Get("Retry-After"), time.Now())}
 	case status >= 500:
-		return &ServerError{base}
+		return &ServerError{APIError: base, RetryAfter: parseRetryAfter(resp.Header.Get("Retry-After"), time.Now())}
 	default:
 		return &base
 	}

@@ -3,6 +3,7 @@ package lettermint
 import (
 	"context"
 	"fmt"
+	"iter"
 	"log/slog"
 	"net/http"
 	"net/url"
@@ -239,6 +240,50 @@ func (c *Client) Ping(ctx context.Context, options ...RequestOption) (string, er
 // Analytics queries email analytics. Needs a team token.
 func (c *Client) Analytics(ctx context.Context, query AnalyticsQuery, options ...RequestOption) (*AnalyticsResponse, error) {
 	return callJSON[AnalyticsResponse](ctx, c.t, opQueryAnalytics, callArgs{label: "Analytics", body: query, options: requestOptions(options)})
+}
+
+// AnalyticsPages queries email analytics and follows Pagination.NextCursor,
+// yielding one whole response per request. Each response carries the next
+// page of Data.Breakdown with its own Meta and Pagination. Needs a team token.
+//
+// A cursor expires 60 seconds after its response, so request the next page
+// promptly; an expired cursor yields a *ValidationError. It requests the next
+// page only when the loop gets to it, and yields an error at most once. The
+// query passed in is not changed.
+//
+//	for page, err := range client.AnalyticsPages(ctx, query) {
+//		if err != nil {
+//			return err
+//		}
+//		rows = append(rows, page.Data.Breakdown...)
+//	}
+func (c *Client) AnalyticsPages(ctx context.Context, query AnalyticsQuery, options ...RequestOption) iter.Seq2[*AnalyticsResponse, error] {
+	callOptions := requestOptions(options)
+	return func(yield func(*AnalyticsResponse, error) bool) {
+		args := callArgs{label: "AnalyticsPages", body: query, options: callOptions}
+		seen := map[string]bool{}
+		if query.Cursor != nil {
+			seen[*query.Cursor] = true
+		}
+		for {
+			page, err := callJSON[AnalyticsResponse](ctx, c.t, opQueryAnalytics, args)
+			if err != nil {
+				yield(nil, err)
+				return
+			}
+			if !yield(page, nil) {
+				return
+			}
+			next := page.Pagination.NextCursor
+			if next == nil || *next == "" || seen[*next] {
+				return
+			}
+			seen[*next] = true
+			body := query
+			body.Cursor = Ptr(*next)
+			args.body = body
+		}
+	}
 }
 
 // BlockedFileTypes lists the file extensions and MIME types that cannot be

@@ -254,7 +254,7 @@ html, err := client.Messages.HTML(ctx, "message-id")
 | `Team.Members` | `List`, `Iterate`, `Retrieve`, `UpdateAssignment` |
 | `Webhooks` | `List`, `Iterate`, `Create`, `Retrieve`, `Update`, `Delete`, `Test`, `RegenerateSecret` |
 | `Webhooks.Deliveries` | `List(ctx, webhookID, …)`, `Iterate(ctx, webhookID, …)`, `Retrieve(ctx, webhookID, deliveryID)` |
-| (client) | `Ping`, `Analytics`, `BlockedFileTypes` |
+| (client) | `Ping`, `Analytics`, `AnalyticsPages`, `BlockedFileTypes` |
 
 Update requests leave absent fields unchanged. A field that may be cleared is a `Nullable`: `lettermint.Null[T]()` sends `null`.
 
@@ -291,6 +291,60 @@ for message, err := range client.Messages.Iterate(ctx, &lettermint.ListMessagesQ
 
 Stop early with `break`. The SDK requests the next page only when the loop gets to it, and yields an error at most once.
 
+### Analytics
+
+`client.Analytics(ctx, query)` runs one analytics query. `Metrics` is the only required field; by default the API returns a summary of the last 30 days:
+
+```go
+result, err := client.Analytics(ctx, lettermint.AnalyticsQuery{
+	Metrics:  []lettermint.AnalyticsMetric{lettermint.AnalyticsMetricDelivered, lettermint.AnalyticsMetricBounced, lettermint.AnalyticsMetricDeliveryRate},
+	From:     lettermint.Ptr("2026-10-01"),
+	To:       lettermint.Ptr("2026-10-31"),
+	Timezone: lettermint.Ptr("Europe/Amsterdam"),
+})
+if err != nil {
+	return err
+}
+
+if summary := result.Data.Summary; summary != nil {
+	rate, ok := summary.Metrics.DeliveryRate.Get() // 0.9836 and true, or false when there is no data
+	fmt.Println(rate, ok)
+}
+fmt.Println(result.Meta.Partial, result.Meta.EffectiveTo)
+```
+
+Add `Include` to ask for a `time_series` or a `breakdown`. A breakdown needs `GroupBy`, and the API returns its rows in pages of `Limit` (at most 200). `AnalyticsPages` follows `Pagination.NextCursor` for you. It returns an `iter.Seq2` that yields one whole response per request, so each page keeps its `Meta` and `Pagination`:
+
+```go
+query := lettermint.AnalyticsQuery{
+	Metrics: []lettermint.AnalyticsMetric{lettermint.AnalyticsMetricDelivered, lettermint.AnalyticsMetricBounced},
+	Include: []lettermint.AnalyticsSection{lettermint.AnalyticsSectionBreakdown},
+	GroupBy: []lettermint.AnalyticsGroupDimension{lettermint.AnalyticsCatalogueGroupDimensionRecipientDomain},
+	Sort:    &lettermint.AnalyticsSort{Metric: lettermint.AnalyticsMetricBounced, Direction: lettermint.AnalyticsSortDirectionDesc},
+	Limit:   lettermint.Ptr(200),
+}
+
+var rows []lettermint.AnalyticsBreakdownRow
+for page, err := range client.AnalyticsPages(ctx, query) {
+	if err != nil {
+		return err
+	}
+	rows = append(rows, page.Data.Breakdown...)
+	if page.Pagination.Truncated {
+		log.Println("More groups exist than the API ranks.")
+	}
+}
+```
+
+A cursor expires 60 seconds after its response, so read the next page promptly. An expired cursor yields a `*ValidationError` with `Errors["cursor"]`; run the query again to start over.
+
+A few things to know when you read a response:
+
+- A metric is `null` when the API cannot measure it for that row or bucket, and a rate is `null` when its denominator is zero. `0` means a measured zero. Metrics are `Nullable` values: `Get()` returns `false` for `null`.
+- `Data.Summary`, `Data.TimeSeries` and `Data.Breakdown` are set only when `Include` asks for them. `Previous`, `Change` and `Meta.Comparison` are set only with `Compare`.
+- `smtp_response_group` can be used in `GroupBy` but not as a filter dimension.
+- Analytics can answer `503` or `504` when a query takes too long or the service is busy. Both return a `*ServerError`; see [Errors](#errors).
+
 ### Cancellation and timeouts
 
 Every method takes a `context.Context`. Cancelling it, or its deadline, stops the request and returns the context's error. `lettermint.WithRequestTimeout(d)` overrides the client's timeout for one call:
@@ -312,7 +366,7 @@ Every error the SDK returns implements `lettermint.Error`. Check the types with 
 | `*ConflictError` | 409 | |
 | `*ValidationError` | 422 | `Errors` (field errors) |
 | `*RateLimitError` | 429 | `RetryAfter` |
-| `*ServerError` | 5xx | |
+| `*ServerError` | 5xx | `RetryAfter` (when the API sent `Retry-After`) |
 | `*TimeoutError` | No complete response within the timeout | `Timeout` |
 | `*ConnectionError` | The request failed (DNS, TLS, refused, reset) | `Err` |
 | `*UnexpectedResponseError` | An empty or non-JSON body where JSON was expected, or an error page such as a proxy's HTML 502 | `Status`, `BodyExcerpt` |
