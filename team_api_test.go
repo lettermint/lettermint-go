@@ -146,6 +146,10 @@ func operationCalls() map[operationKey]func(context.Context, *Client) error {
 			_, err := c.Messages.Process(ctx, id("messageId"))
 			return err
 		},
+		opResendMessage: func(ctx context.Context, c *Client) error {
+			_, err := c.Messages.Resend(ctx, id("messageId"), ResendMessageRequest{})
+			return err
+		},
 		opCreateProject: func(ctx context.Context, c *Client) error {
 			_, err := c.Projects.Create(ctx, StoreProjectData{Name: "Production"})
 			return err
@@ -240,7 +244,7 @@ func responseFor(key operationKey) *http.Response {
 
 func TestEveryOperationHasAMethod(t *testing.T) {
 	calls := operationCalls()
-	if len(operations) != 58 || len(calls) != len(operations) {
+	if len(operations) != 59 || len(calls) != len(operations) {
 		t.Fatalf("%d operations, %d calls", len(operations), len(calls))
 	}
 	keys := make([]string, 0, len(operations))
@@ -314,6 +318,73 @@ func TestRequestBodies(t *testing.T) {
 	}
 	if requests[3].Header.Get("Idempotency-Key") != "process-1" || len(requests[3].RawBody) != 0 {
 		t.Fatal(requests[3].Header)
+	}
+}
+
+func TestMessagesResend(t *testing.T) {
+	client, fake := newTestClient(t, func(recorded, int) *http.Response {
+		return jsonResponse(202, map[string]any{"message_id": "msg_new", "status": "pending"})
+	})
+	ctx := context.Background()
+	resp, err := client.Messages.Resend(ctx, "msg/1", ResendMessageRequest{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.MessageID != "msg_new" || resp.Status != "pending" {
+		t.Fatalf("%+v", resp)
+	}
+	if _, err := client.Messages.Resend(ctx, "msg/1", ResendMessageRequest{Recipients: []string{"jane@example.test", "john@example.test"}}, WithIdempotencyKey("resend-1")); err != nil {
+		t.Fatal(err)
+	}
+	requests := fake.all()
+	for _, r := range requests {
+		if r.Method != "POST" || r.URL.String() != "https://api.lettermint.co/v1/messages/msg%2F1/resend" {
+			t.Fatal(r.Method, r.URL)
+		}
+		if r.Header.Get("Authorization") != "Bearer "+teamFixture || r.Header.Get("x-lettermint-token") != "" || r.Header.Get("Content-Type") != "application/json" {
+			t.Fatal(r.Header)
+		}
+	}
+	if string(requests[0].RawBody) != `{}` || requests[0].Header.Get("Idempotency-Key") != "" {
+		t.Fatal(string(requests[0].RawBody), requests[0].Header)
+	}
+	if string(requests[1].RawBody) != `{"recipients":["jane@example.test","john@example.test"]}` || requests[1].Header.Get("Idempotency-Key") != "resend-1" {
+		t.Fatal(string(requests[1].RawBody), requests[1].Header)
+	}
+
+	// Without a team token it uses the sending token.
+	sendingFake := &fakeTransport{handle: func(recorded, int) *http.Response {
+		return jsonResponse(202, map[string]any{"message_id": "msg_new", "status": "pending"})
+	}}
+	sendingOnly, _ := New(WithSendingToken(sendingFixture), WithHTTPClient(&http.Client{Transport: sendingFake}))
+	if _, err := sendingOnly.Messages.Resend(ctx, "m", ResendMessageRequest{}); err != nil {
+		t.Fatal(err)
+	}
+	if r := sendingFake.all()[0]; r.Header.Get("x-lettermint-token") != sendingFixture || r.Header.Get("Authorization") != "" {
+		t.Fatal(r.Header)
+	}
+
+	// An empty ID is rejected before a request.
+	_, err = client.Messages.Resend(ctx, "", ResendMessageRequest{})
+	if !strings.Contains(mustAs[*ConfigError](t, err).Message, "Messages.Resend: messageId must be a non-empty string") {
+		t.Fatal(err)
+	}
+	if len(fake.all()) != 2 {
+		t.Fatal(len(fake.all()))
+	}
+}
+
+func TestMessagesResendGoneIsAnAPIError(t *testing.T) {
+	client, _ := newTestClient(t, func(recorded, int) *http.Response {
+		return jsonResponse(410, map[string]any{"error": map[string]any{"code": "MESSAGE_CONTENT_UNAVAILABLE", "message": "The content of this message is no longer retained."}})
+	})
+	_, err := client.Messages.Resend(context.Background(), "m", ResendMessageRequest{})
+	apiErr := mustAs[*APIError](t, err)
+	if apiErr.Status != 410 || apiErr.Code != "MESSAGE_CONTENT_UNAVAILABLE" || apiErr.Message != "The content of this message is no longer retained." {
+		t.Fatalf("%+v", apiErr)
+	}
+	if _, ok := err.(*APIError); !ok {
+		t.Fatalf("%T, want *APIError", err)
 	}
 }
 

@@ -17,7 +17,8 @@ import (
 )
 
 // IdempotentOption configures a call that accepts an Idempotency-Key:
-// Emails.Send, Emails.SendBatch, EmailBuilder.Send and Messages.Process.
+// Emails.Send, Emails.SendBatch, EmailBuilder.Send, Messages.Process and
+// Messages.Resend.
 // Every RequestOption is also an IdempotentOption.
 type IdempotentOption interface {
 	applyIdempotent(*callOptions)
