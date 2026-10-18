@@ -61,7 +61,7 @@ client, err := lettermint.New(
 )
 ```
 
-Each part uses its own token and never falls back to the other one. If the token a method needs is missing, the method returns a `*lettermint.ConfigError` that names the option (`Domains.List needs a team token; create the client with lettermint.WithTeamToken`), before any request. `client.Ping` uses the team token when it is set, otherwise the sending token. `Messages.Reschedule` and `Messages.Cancel` accept either token in the same way.
+Each part uses its own token and never falls back to the other one. If the token a method needs is missing, the method returns a `*lettermint.ConfigError` that names the option (`Domains.List needs a team token; create the client with lettermint.WithTeamToken`), before any request. `client.Ping` uses the team token when it is set, otherwise the sending token. `Messages.Reschedule`, `Messages.Cancel` and `Messages.Resend` accept either token in the same way.
 
 `NewFromToken` creates a client from one token and chooses its type by the format: `lm_team_` followed by letters and digits is a team token, and `lm_` followed by letters and digits is a sending token. Any other value, such as an SSO verification token (`lm_sso_…`), returns a `*ConfigError`; use `New` with `WithSendingToken` or `WithTeamToken` for it.
 
@@ -191,6 +191,18 @@ client.Messages.Reschedule(ctx, resp.MessageID, lettermint.RescheduleMessageRequ
 client.Messages.Cancel(ctx, resp.MessageID)
 ```
 
+### Resending
+
+Send a sent message again as a new message with its own ID. Leave `Recipients` empty to resend to every original recipient:
+
+```go
+resent, err := client.Messages.Resend(ctx, "message-id", lettermint.ResendMessageRequest{
+	Recipients: []string{"jane@example.com"},
+}, lettermint.WithIdempotencyKey("resend-order-1234"))
+```
+
+A message can be resent while its content is retained, and at most 5 times in 24 hours. When the content is no longer retained, the API answers `410` and the method returns an `*APIError` with `Status` 410.
+
 ### Sandbox
 
 In a Sandbox project, nothing is delivered. Choose the simulated result per email:
@@ -244,7 +256,7 @@ html, err := client.Messages.HTML(ctx, "message-id")
 | Field | Methods |
 | --- | --- |
 | `Domains` | `List`, `Iterate`, `Create`, `Retrieve`, `Delete`, `VerifyDNSRecords`, `VerifyDNSRecord`, `UpdateProjects` |
-| `Messages` | `List`, `Iterate`, `Retrieve`, `Events`, `IterateEvents`, `Source`, `HTML`, `Text`, `Reschedule`, `Cancel`, `Process` |
+| `Messages` | `List`, `Iterate`, `Retrieve`, `Events`, `IterateEvents`, `Source`, `HTML`, `Text`, `Reschedule`, `Cancel`, `Process`, `Resend` |
 | `Projects` | `List`, `Iterate`, `Create`, `Retrieve`, `Update`, `Delete`, `RotateToken` |
 | `Projects.ReportForwarding` | `Retrieve`, `Update`, `Delete`, `Verify`, `ResendCode` |
 | `Routes` | `List(ctx, projectID, …)`, `Iterate(ctx, projectID, …)`, `Create(ctx, projectID, …)`, `Retrieve`, `Update`, `Delete`, `VerifyInboundDomain` |

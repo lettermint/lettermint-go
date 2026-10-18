@@ -6,8 +6,8 @@ import (
 )
 
 // MessagesService reads sent and received messages. Needs a team token;
-// Reschedule and Cancel also accept the sending token when no team token is
-// set.
+// Reschedule, Cancel and Resend also accept the sending token when no team
+// token is set.
 type MessagesService struct{ service }
 
 // List returns one page of messages. Pass nil for no query parameters.
@@ -66,4 +66,15 @@ func (s *MessagesService) Cancel(ctx context.Context, messageID string, options 
 // accepts WithIdempotencyKey.
 func (s *MessagesService) Process(ctx context.Context, messageID string, options ...IdempotentOption) (*ProcessInboundMessageResponse, error) {
 	return callJSON[ProcessInboundMessageResponse](ctx, s.t, opProcessInboundMessage, callArgs{label: "Messages.Process", path: []string{messageID}, options: idempotentOptions(options)})
+}
+
+// Resend sends the stored content of a sent message again as a new message
+// with its own ID; the new message links to the original through
+// ResentFromMessageID. Leave body.Recipients empty to resend to every
+// original recipient. A message can be resent while its content is retained
+// (HTTP 410 after that) and at most 5 times in 24 hours. It accepts
+// WithIdempotencyKey and uses the team token when it is set, otherwise the
+// sending token.
+func (s *MessagesService) Resend(ctx context.Context, messageID string, body ResendMessageRequest, options ...IdempotentOption) (*PendingSendMailResponse, error) {
+	return callJSON[PendingSendMailResponse](ctx, s.t, opResendMessage, callArgs{label: "Messages.Resend", path: []string{messageID}, body: body, options: idempotentOptions(options)})
 }
