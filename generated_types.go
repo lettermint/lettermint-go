@@ -1287,7 +1287,7 @@ type MessageData struct {
 	RouteID     string       `json:"route_id"`
 	CreatedAt   string       `json:"created_at"`
 	// The ID of the message this message resent. Null when it is not a resend
-	ResentFromMessageID *string `json:"resent_from_message_id"`
+	ResentFromMessageID Nullable[string] `json:"resent_from_message_id,omitzero"`
 }
 
 type MessageEventData struct {
