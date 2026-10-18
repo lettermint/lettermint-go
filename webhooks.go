@@ -9,7 +9,7 @@ import (
 // incoming deliveries, use NewWebhook.
 type WebhooksService struct {
 	service
-	// Deliveries reads the delivery attempts of a webhook.
+	// Deliveries reads and retries the delivery attempts of a webhook.
 	Deliveries *WebhookDeliveriesService
 }
 
@@ -56,8 +56,8 @@ func (s *WebhooksService) RegenerateSecret(ctx context.Context, webhookID string
 	return callJSON[WebhookSecretResponse](ctx, s.t, opRegenerateWebhookSecret, callArgs{label: "Webhooks.RegenerateSecret", path: []string{webhookID}, options: requestOptions(options)})
 }
 
-// WebhookDeliveriesService reads the delivery attempts of a webhook. Needs a
-// team token.
+// WebhookDeliveriesService reads and retries the delivery attempts of a
+// webhook. Needs a team token.
 type WebhookDeliveriesService struct{ service }
 
 // List returns one page of the deliveries of a webhook. Pass nil for no
@@ -74,4 +74,13 @@ func (s *WebhookDeliveriesService) Iterate(ctx context.Context, webhookID string
 // Retrieve returns one delivery of a webhook.
 func (s *WebhookDeliveriesService) Retrieve(ctx context.Context, webhookID, deliveryID string, options ...RequestOption) (*WebhookDeliveryData, error) {
 	return callJSON[WebhookDeliveryData](ctx, s.t, opGetWebhookDelivery, callArgs{label: "Webhooks.Deliveries.Retrieve", path: []string{webhookID, deliveryID}, options: requestOptions(options)})
+}
+
+// Retry sends the original payload of a delivery to the webhook again now.
+// The retry counts as a delivery attempt; if it fails with a retryable error,
+// automatic retries continue. When the delivery cannot be retried, it returns
+// a *ConflictError with Code WEBHOOK_DISABLED, WEBHOOK_DELIVERY_NOT_RETRYABLE
+// or WEBHOOK_DELIVERY_RETRY_IN_PROGRESS.
+func (s *WebhookDeliveriesService) Retry(ctx context.Context, webhookID, deliveryID string, options ...RequestOption) (*RetryWebhookDeliveryResponse, error) {
+	return callJSON[RetryWebhookDeliveryResponse](ctx, s.t, opRetryWebhookDelivery, callArgs{label: "Webhooks.Deliveries.Retry", path: []string{webhookID, deliveryID}, options: requestOptions(options)})
 }
