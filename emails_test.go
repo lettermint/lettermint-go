@@ -393,3 +393,238 @@ func TestNothingIsLeftAfterAFailedRequest(t *testing.T) {
 		t.Fatal(second.Header, string(second.RawBody))
 	}
 }
+
+func TestSendBatchItemsSendsPerEmailKeys(t *testing.T) {
+	client, fake := newTestClient(t, func(recorded, int) *http.Response {
+		return jsonResponse(202, []any{
+			map[string]any{"message_id": "m1", "status": "pending"},
+			map[string]any{"message_id": "m2", "status": "pending"},
+			map[string]any{"message_id": "m3", "status": "pending"},
+		})
+	})
+	built, err := client.Emails.Compose().From("a@example.test").To("c@example.test").Subject("Three").Text("Hi").BuildBatchItem("key-3")
+	if err != nil {
+		t.Fatal(err)
+	}
+	results, err := client.Emails.SendBatchItems(context.Background(), []SendBatchMailItem{
+		{From: "a@example.test", To: []string{"b@example.test"}, Subject: "One", Text: Value("Hi"), IdempotencyKey: Ptr("key-1")},
+		{From: "a@example.test", To: []string{"b@example.test"}, Subject: "Two", Text: Value("Hi")},
+		built,
+	}, WithIdempotencyKey("batch-1"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(results) != 3 || results[2].MessageID != "m3" {
+		t.Fatalf("%+v", results)
+	}
+	r := fake.all()[0]
+	if r.Method != "POST" || r.URL.String() != "https://api.lettermint.co/v1/send/batch" {
+		t.Fatal(r.Method, r.URL)
+	}
+	if r.Header.Get("Idempotency-Key") != "batch-1" || r.Header.Get("x-lettermint-token") != sendingFixture || r.Header.Get("Authorization") != "" {
+		t.Fatal(r.Header)
+	}
+	want := `[{"from":"a@example.test","to":["b@example.test"],"subject":"One","text":"Hi","idempotency_key":"key-1"},` +
+		`{"from":"a@example.test","to":["b@example.test"],"subject":"Two","text":"Hi"},` +
+		`{"from":"a@example.test","to":["c@example.test"],"subject":"Three","text":"Hi","idempotency_key":"key-3"}]`
+	if string(r.RawBody) != want {
+		t.Fatal(string(r.RawBody))
+	}
+
+	// Without the header option, no Idempotency-Key header is sent.
+	if _, err := client.Emails.SendBatchItems(context.Background(), []SendBatchMailItem{{From: "a", To: []string{"b"}, Subject: "x", IdempotencyKey: Ptr("k")}}); err != nil {
+		t.Fatal(err)
+	}
+	if got := fake.all()[1].Header.Get("Idempotency-Key"); got != "" {
+		t.Fatal(got)
+	}
+	// A nil slice sends an empty array.
+	if _, err := client.Emails.SendBatchItems(context.Background(), nil); err != nil {
+		t.Fatal(err)
+	}
+	if got := string(fake.all()[2].RawBody); got != "[]" {
+		t.Fatal(got)
+	}
+}
+
+func TestSendBatchItemsValidatesBeforeSending(t *testing.T) {
+	client, fake := newTestClient(t, func(recorded, int) *http.Response { return jsonResponse(202, []any{}) })
+	ctx := context.Background()
+	item := func(key *string) SendBatchMailItem {
+		return SendBatchMailItem{From: "a", To: []string{"b"}, Subject: "x", IdempotencyKey: key}
+	}
+	cases := map[string]struct {
+		items   []SendBatchMailItem
+		field   string
+		message string
+	}{
+		"empty key":     {[]SendBatchMailItem{item(nil), item(Ptr(""))}, "items[1].idempotency_key", "1-255 characters"},
+		"long key":      {[]SendBatchMailItem{item(Ptr(strings.Repeat("k", 256)))}, "items[0].idempotency_key", "1-255 characters"},
+		"duplicate key": {[]SendBatchMailItem{item(Ptr("same")), item(nil), item(Ptr("same"))}, "items[2].idempotency_key", "items[0] has the same key"},
+		"invalid tag":   {[]SendBatchMailItem{item(nil), {From: "a", Tags: []MessageTagInput{{Name: "!", Value: "x"}}}}, "items[1].tags", "message tag names"},
+		"attachment":    {[]SendBatchMailItem{{From: "a", Attachments: []MessageAttachmentInput{{Content: "SGk="}}}}, "items[0].attachments[0]", "filename"},
+	}
+	for name, c := range cases {
+		_, err := client.Emails.SendBatchItems(ctx, c.items)
+		validation := mustAs[*ClientValidationError](t, err)
+		if validation.Field != c.field || !strings.Contains(validation.Message, c.message) {
+			t.Errorf("%s: %+v", name, validation)
+		}
+	}
+	if len(fake.all()) != 0 {
+		t.Fatal("invalid batches send nothing")
+	}
+	// 255 characters, counted as characters rather than bytes, are allowed.
+	if _, err := client.Emails.SendBatchItems(ctx, []SendBatchMailItem{item(Ptr(strings.Repeat("é", 255))), item(Ptr("other"))}); err != nil {
+		t.Fatal(err)
+	}
+	teamOnly, _ := New(WithTeamToken(teamFixture), WithHTTPClient(&http.Client{Transport: fake}))
+	_, err := teamOnly.Emails.SendBatchItems(ctx, []SendBatchMailItem{item(nil)})
+	if msg := mustAs[*ConfigError](t, err).Message; msg != "Emails.SendBatchItems needs a sending token; create the client with lettermint.WithSendingToken" {
+		t.Fatal(msg)
+	}
+}
+
+func TestBuildBatchItem(t *testing.T) {
+	client, fake := newTestClient(t, accepted)
+	builder := client.Emails.Compose().
+		From("Acme <hello@acme.test>").
+		To("jane@example.test").
+		CC("cc@example.test").
+		Subject("Everything").
+		HTML("<p>Hi</p>").
+		Metadata(map[string]string{"order_id": "1234"}).
+		Tags(MessageTagInput{Name: "campaign", Value: "welcome"}).
+		Route("transactional").
+		Attach(Attachment{Filename: "a.txt", Content: []byte("Hi")})
+	message, err := builder.Build()
+	if err != nil {
+		t.Fatal(err)
+	}
+	item, err := builder.BuildBatchItem("order-1234")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if item.IdempotencyKey == nil || *item.IdempotencyKey != "order-1234" {
+		t.Fatal(item.IdempotencyKey)
+	}
+	itemJSON, _ := json.Marshal(item)
+	messageJSON, _ := json.Marshal(message)
+	if want := strings.TrimSuffix(string(messageJSON), "}") + `,"idempotency_key":"order-1234"}`; string(itemJSON) != want {
+		t.Fatalf("%s\nwant %s", itemJSON, want)
+	}
+	// The item is a copy, and single sends never carry the per-email key.
+	item.To[0] = "changed@example.test"
+	if _, err := builder.Send(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	body := fake.all()[0].JSON(t)
+	if _, ok := body["idempotency_key"]; ok || body["to"].([]any)[0] != "jane@example.test" {
+		t.Fatal(body)
+	}
+
+	if _, err := builder.BuildBatchItem(""); mustAs[*ClientValidationError](t, err).Field != "idempotency_key" {
+		t.Fatal(err)
+	}
+	invalid := builder.Tags(MessageTagInput{Name: "!", Value: "x"})
+	if _, err := invalid.BuildBatchItem("k"); err == nil || err != invalid.Err() {
+		t.Fatal(err)
+	}
+}
+
+// batchItem must copy every field of SendMailRequest, and SendBatchMailItem
+// must have exactly those fields plus IdempotencyKey. When the types are
+// regenerated with a new field, this test fails until batchItem copies it.
+func TestBatchItemCopiesEveryField(t *testing.T) {
+	messageType := reflect.TypeFor[SendMailRequest]()
+	itemType := reflect.TypeFor[SendBatchMailItem]()
+	if itemType.NumField() != messageType.NumField()+1 {
+		t.Fatalf("SendBatchMailItem has %d fields, SendMailRequest %d", itemType.NumField(), messageType.NumField())
+	}
+	for i := range messageType.NumField() {
+		field := messageType.Field(i)
+		other, ok := itemType.FieldByName(field.Name)
+		if !ok || other.Type != field.Type || other.Tag != field.Tag {
+			t.Errorf("SendBatchMailItem.%s does not match SendMailRequest.%s", field.Name, field.Name)
+		}
+	}
+	if key, ok := itemType.FieldByName("IdempotencyKey"); !ok || key.Tag.Get("json") != "idempotency_key,omitzero" {
+		t.Fatal("SendBatchMailItem.IdempotencyKey")
+	}
+	// Fill every field of a message with a non-zero value and check the copy.
+	var message SendMailRequest
+	value := reflect.ValueOf(&message).Elem()
+	for i := range value.NumField() {
+		fillNonZero(t, value.Field(i))
+	}
+	item := reflect.ValueOf(batchItem(message))
+	for i := range value.NumField() {
+		name := messageType.Field(i).Name
+		if !reflect.DeepEqual(item.FieldByName(name).Interface(), value.Field(i).Interface()) {
+			t.Errorf("batchItem does not copy %s", name)
+		}
+	}
+	if item.FieldByName("IdempotencyKey").Interface().(*string) != nil {
+		t.Fatal("batchItem sets no key")
+	}
+}
+
+func fillNonZero(t *testing.T, v reflect.Value) {
+	t.Helper()
+	switch v.Kind() {
+	case reflect.String:
+		v.SetString("x")
+	case reflect.Bool:
+		v.SetBool(true)
+	case reflect.Pointer:
+		v.Set(reflect.New(v.Type().Elem()))
+		fillNonZero(t, v.Elem())
+	case reflect.Slice:
+		v.Set(reflect.MakeSlice(v.Type(), 1, 1))
+		fillNonZero(t, v.Index(0))
+	case reflect.Map:
+		v.Set(reflect.MakeMap(v.Type()))
+		v.SetMapIndex(reflect.ValueOf("k"), reflect.ValueOf("v"))
+	case reflect.Struct:
+		if v.Type() == reflect.TypeFor[Nullable[string]]() {
+			v.Set(reflect.ValueOf(Value("x")))
+			return
+		}
+		exported := 0
+		for i := range v.NumField() {
+			if v.Type().Field(i).IsExported() {
+				fillNonZero(t, v.Field(i))
+				exported++
+			}
+		}
+		if exported == 0 {
+			t.Fatalf("fillNonZero: %s", v.Type())
+		}
+	default:
+		t.Fatalf("fillNonZero: %s", v.Type())
+	}
+}
+
+func TestSendBatchErrorsListAcceptedEmails(t *testing.T) {
+	client, _ := newTestClient(t, func(_ recorded, i int) *http.Response {
+		if i == 0 {
+			return jsonResponse(500, map[string]any{"error": map[string]any{
+				"code":    "INTERNAL_ERROR",
+				"message": "Server error",
+				"details": map[string]any{"accepted": []any{map[string]any{"index": 0, "message_id": "m1"}}},
+			}})
+		}
+		return jsonResponse(409, map[string]any{"error": map[string]any{"code": "IDEMPOTENCY_CONFLICT", "message": "The idempotency key was used with different content."}})
+	})
+	items := []SendBatchMailItem{{From: "a", To: []string{"b"}, Subject: "x", IdempotencyKey: Ptr("k1")}, {From: "a", To: []string{"c"}, Subject: "y", IdempotencyKey: Ptr("k2")}}
+	_, err := client.Emails.SendBatchItems(context.Background(), items)
+	details, _ := mustAs[*ServerError](t, err).Details.(map[string]any)
+	acceptedEmails, _ := details["accepted"].([]any)
+	if len(acceptedEmails) != 1 || acceptedEmails[0].(map[string]any)["message_id"] != "m1" {
+		t.Fatalf("%#v", details)
+	}
+	_, err = client.Emails.SendBatchItems(context.Background(), items)
+	if conflict := mustAs[*ConflictError](t, err); conflict.Code != "IDEMPOTENCY_CONFLICT" {
+		t.Fatalf("%+v", conflict)
+	}
+}

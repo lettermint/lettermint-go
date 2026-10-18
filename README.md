@@ -125,9 +125,10 @@ _, err := email.HTML(invoiceHTML).Send(ctx)
 | `Attach(Attachment)` | Adds an attachment. |
 | `Send(ctx, options...)` | Sends the email. The builder can be sent again. |
 | `Build()` | Returns the message in API format (`SendMailRequest`). |
+| `BuildBatchItem(key)` | Returns the message as a batch item (`SendBatchMailItem`) with a per-email idempotency key. |
 | `Err()` | The error a setter recorded, if any. |
 
-A setter that gets invalid input, such as an invalid tag, records the error on the builder it returns. `Err`, `Build` and `Send` return that error, and `Send` sends nothing. The builder it was called on stays valid.
+A setter that gets invalid input, such as an invalid tag, records the error on the builder it returns. `Err`, `Build`, `BuildBatchItem` and `Send` return that error, and `Send` sends nothing. The builder it was called on stays valid.
 
 `client.Emails.ComposeFrom(message)` starts a builder from a `SendMailRequest`.
 
@@ -159,6 +160,20 @@ results, err := client.Emails.SendBatch(ctx, []lettermint.SendMailRequest{
 	second,
 })
 ```
+
+Emails before a failed one may already be accepted. The returned `*APIError` then lists them in `Details["accepted"]`, with their index in the batch and their `message_id`.
+
+To retry a batch safely, give each email its own idempotency key with `SendBatchItems`. When an email with the same key and content was accepted in the last 24 hours, the API returns its original result and does not send it again. Keys are 1-255 characters and must be unique within a batch; reusing a key with different content rejects the whole batch with a `*ConflictError`:
+
+```go
+third, err := welcome.To("joe@example.com").HTML("<p>Hi Joe</p>").BuildBatchItem("welcome-joe")
+results, err := client.Emails.SendBatchItems(ctx, []lettermint.SendBatchMailItem{
+	{From: "hello@acme.com", To: []string{"jane@example.com"}, Subject: "Hi Jane", Text: lettermint.Value("Hello"), IdempotencyKey: lettermint.Ptr("welcome-jane")},
+	third,
+})
+```
+
+The per-email keys are separate from `WithIdempotencyKey`, which still sets the `Idempotency-Key` header for the whole request.
 
 ### Idempotency
 

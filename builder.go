@@ -42,8 +42,8 @@ type Attachment struct {
 //	resp, err := email.HTML(invoiceHTML).Send(ctx)
 //
 // A setter that receives invalid input, such as an invalid tag, records the
-// error on the builder it returns; Err, Build and Send return it, and Send
-// makes no request. The builder it was called on stays valid.
+// error on the builder it returns; Err, Build, BuildBatchItem and Send return
+// it, and Send makes no request. The builder it was called on stays valid.
 //
 // To, CC, BCC, ReplyTo, Headers, Metadata and Tags replace their value;
 // Attach adds an attachment. An empty string removes HTML, Text, Tag, Route
@@ -197,6 +197,22 @@ func (b EmailBuilder) Build() (SendMailRequest, error) {
 	return cloneMessage(b.message), nil
 }
 
+// BuildBatchItem returns a copy of the message as a SendBatchMailItem for
+// Emails.SendBatchItems, with idempotencyKey (1-255 characters) as its
+// per-email idempotency key, or the error a setter recorded. The key is only
+// part of the returned item: Send never sends it.
+func (b EmailBuilder) BuildBatchItem(idempotencyKey string) (SendBatchMailItem, error) {
+	if b.err != nil {
+		return SendBatchMailItem{}, b.err
+	}
+	if err := validateBatchIdempotencyKey(idempotencyKey, "idempotency_key"); err != nil {
+		return SendBatchMailItem{}, err
+	}
+	item := batchItem(cloneMessage(b.message))
+	item.IdempotencyKey = Ptr(idempotencyKey)
+	return item, nil
+}
+
 // Send sends the email. The builder stays unchanged and can be sent again.
 func (b EmailBuilder) Send(ctx context.Context, options ...IdempotentOption) (*SendMailResponse, error) {
 	if b.emails == nil {
@@ -251,6 +267,31 @@ func optionalPointer[T ~string](value T) *T {
 
 // cloneMessage copies a message deeply enough that neither copy can change
 // the other: slices and maps are copied.
+// batchItem copies every field of a message into a batch item. The batch item
+// has the same fields plus IdempotencyKey; a test checks that they stay in
+// step when the types are regenerated.
+func batchItem(m SendMailRequest) SendBatchMailItem {
+	return SendBatchMailItem{
+		Route:         m.Route,
+		From:          m.From,
+		To:            m.To,
+		CC:            m.CC,
+		BCC:           m.BCC,
+		ReplyTo:       m.ReplyTo,
+		Subject:       m.Subject,
+		ScheduledAt:   m.ScheduledAt,
+		SandboxResult: m.SandboxResult,
+		Headers:       m.Headers,
+		Metadata:      m.Metadata,
+		Tag:           m.Tag,
+		Tags:          m.Tags,
+		Settings:      m.Settings,
+		HTML:          m.HTML,
+		Text:          m.Text,
+		Attachments:   m.Attachments,
+	}
+}
+
 func cloneMessage(message SendMailRequest) SendMailRequest {
 	clone := message
 	clone.To = slices.Clone(message.To)

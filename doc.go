@@ -23,7 +23,8 @@
 //		Send(ctx, lettermint.WithIdempotencyKey("welcome-jane"))
 //
 // client.Emails.Send and client.Emails.SendBatch take messages in the API's
-// format (SendMailRequest).
+// format (SendMailRequest). client.Emails.SendBatchItems takes batch items
+// (SendBatchMailItem), which can carry a per-email idempotency key.
 //
 // # Team API
 //
