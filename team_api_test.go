@@ -118,6 +118,10 @@ func operationCalls() map[operationKey]func(context.Context, *Client) error {
 			_, err := c.Webhooks.Deliveries.Retrieve(ctx, id("webhookId"), id("deliveryId"))
 			return err
 		},
+		opRetryWebhookDelivery: func(ctx context.Context, c *Client) error {
+			_, err := c.Webhooks.Deliveries.Retry(ctx, id("webhookId"), id("deliveryId"))
+			return err
+		},
 		opRescheduleMessage: func(ctx context.Context, c *Client) error {
 			_, err := c.Messages.Reschedule(ctx, id("messageId"), RescheduleMessageRequest{ScheduledAt: "2026-10-01T09:00:00Z"})
 			return err
@@ -244,7 +248,7 @@ func responseFor(key operationKey) *http.Response {
 
 func TestEveryOperationHasAMethod(t *testing.T) {
 	calls := operationCalls()
-	if len(operations) != 59 || len(calls) != len(operations) {
+	if len(operations) != 60 || len(calls) != len(operations) {
 		t.Fatalf("%d operations, %d calls", len(operations), len(calls))
 	}
 	keys := make([]string, 0, len(operations))
@@ -385,6 +389,86 @@ func TestMessagesResendGoneIsAnAPIError(t *testing.T) {
 	}
 	if _, ok := err.(*APIError); !ok {
 		t.Fatalf("%T, want *APIError", err)
+	}
+}
+
+func TestWebhookDeliveriesRetry(t *testing.T) {
+	client, fake := newTestClient(t, func(recorded, int) *http.Response {
+		return jsonResponse(202, map[string]any{"message": "The delivery is being retried.", "delivery_id": "delivery/1"})
+	})
+	ctx := context.Background()
+	resp, err := client.Webhooks.Deliveries.Retry(ctx, "hook/1", "delivery/1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.Message != "The delivery is being retried." || resp.DeliveryID != "delivery/1" {
+		t.Fatalf("%+v", resp)
+	}
+	r := fake.all()[0]
+	if r.Method != "POST" || r.URL.String() != "https://api.lettermint.co/v1/webhooks/hook%2F1/deliveries/delivery%2F1/retry" {
+		t.Fatal(r.Method, r.URL)
+	}
+	if r.Header.Get("Authorization") != "Bearer "+teamFixture || r.Header.Get("x-lettermint-token") != "" {
+		t.Fatal(r.Header)
+	}
+	if len(r.RawBody) != 0 || r.Header.Get("Content-Type") != "" || r.Header.Get("Idempotency-Key") != "" {
+		t.Fatal(string(r.RawBody), r.Header)
+	}
+
+	// Empty IDs are rejected before a request.
+	_, err = client.Webhooks.Deliveries.Retry(ctx, "", "d")
+	if !strings.Contains(mustAs[*ConfigError](t, err).Message, "Webhooks.Deliveries.Retry: webhookId must be a non-empty string") {
+		t.Fatal(err)
+	}
+	_, err = client.Webhooks.Deliveries.Retry(ctx, "w", "")
+	if !strings.Contains(mustAs[*ConfigError](t, err).Message, "Webhooks.Deliveries.Retry: deliveryId must be a non-empty string") {
+		t.Fatal(err)
+	}
+	if len(fake.all()) != 1 {
+		t.Fatal(len(fake.all()))
+	}
+}
+
+func TestWebhookDeliveriesRetryConflict(t *testing.T) {
+	client, _ := newTestClient(t, func(recorded, int) *http.Response {
+		return jsonResponse(409, map[string]any{"error": map[string]any{"code": "WEBHOOK_DELIVERY_NOT_RETRYABLE", "message": "This delivery cannot be retried."}})
+	})
+	_, err := client.Webhooks.Deliveries.Retry(context.Background(), "w", "d")
+	mustAs[*ConflictError](t, err)
+	apiErr := mustAs[*APIError](t, err)
+	if apiErr.Status != 409 || apiErr.Code != "WEBHOOK_DELIVERY_NOT_RETRYABLE" || apiErr.Message != "This delivery cannot be retried." {
+		t.Fatalf("%+v", apiErr)
+	}
+}
+
+func TestWebhookDeliveryNextRetryAt(t *testing.T) {
+	bodies := []map[string]any{
+		{"id": "d1", "next_retry_at": "2026-10-18T09:00:00Z"},
+		{"id": "d2", "next_retry_at": nil},
+		{"id": "d3"},
+	}
+	client, _ := newTestClient(t, func(_ recorded, i int) *http.Response { return jsonResponse(200, bodies[i]) })
+	ctx := context.Background()
+	scheduled, err := client.Webhooks.Deliveries.Retrieve(ctx, "w", "d1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if at, ok := scheduled.NextRetryAt.Get(); !ok || at != "2026-10-18T09:00:00Z" {
+		t.Fatalf("%+v", scheduled.NextRetryAt)
+	}
+	none, err := client.Webhooks.Deliveries.Retrieve(ctx, "w", "d2")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !none.NextRetryAt.IsNull() {
+		t.Fatalf("%+v", none.NextRetryAt)
+	}
+	absent, err := client.Webhooks.Deliveries.Retrieve(ctx, "w", "d3")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if absent.NextRetryAt.IsSet() {
+		t.Fatalf("%+v", absent.NextRetryAt)
 	}
 }
 

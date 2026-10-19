@@ -280,8 +280,10 @@ html, err := client.Messages.HTML(ctx, "message-id")
 | `Team` | `Retrieve`, `Update`, `Usage`, `Roles` |
 | `Team.Members` | `List`, `Iterate`, `Retrieve`, `UpdateAssignment` |
 | `Webhooks` | `List`, `Iterate`, `Create`, `Retrieve`, `Update`, `Delete`, `Test`, `RegenerateSecret` |
-| `Webhooks.Deliveries` | `List(ctx, webhookID, …)`, `Iterate(ctx, webhookID, …)`, `Retrieve(ctx, webhookID, deliveryID)` |
+| `Webhooks.Deliveries` | `List(ctx, webhookID, …)`, `Iterate(ctx, webhookID, …)`, `Retrieve(ctx, webhookID, deliveryID)`, `Retry(ctx, webhookID, deliveryID)` |
 | (client) | `Ping`, `Analytics`, `AnalyticsPages`, `BlockedFileTypes` |
+
+`Webhooks.Deliveries.Retry` sends a delivery's original payload to the webhook again now, and returns a `*ConflictError` when the delivery cannot be retried.
 
 Update requests leave absent fields unchanged. A field that may be cleared is a `Nullable`: `lettermint.Null[T]()` sends `null`.
 
