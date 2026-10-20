@@ -262,6 +262,10 @@ func operationCalls() map[operationKey]func(context.Context, *Client) error {
 			_, err := c.Team.DuplicateRole(ctx, id("roleId"), DuplicateTeamRoleData{Name: "Support copy"})
 			return err
 		},
+		opDeleteTeamMember: func(ctx context.Context, c *Client) error {
+			_, err := c.Team.Members.Remove(ctx, id("userId"))
+			return err
+		},
 		opUpdateWebhook: func(ctx context.Context, c *Client) error {
 			_, err := c.Webhooks.Update(ctx, id("webhookId"), UpdateWebhookData{BasicAuth: Null[WebhookBasicAuthData]()})
 			return err
@@ -285,16 +289,10 @@ func responseFor(key operationKey) *http.Response {
 	return jsonResponse(op.Response.Status[0], map[string]any{})
 }
 
-// pendingOperations have no SDK method yet. The member removal method is
-// added by the next PR in this stack, which removes this list.
-var pendingOperations = map[operationKey]bool{
-	opDeleteTeamMember: true,
-}
-
 func TestEveryOperationHasAMethod(t *testing.T) {
 	calls := operationCalls()
-	if len(operations) != 71 || len(calls)+len(pendingOperations) != len(operations) {
-		t.Fatalf("%d operations, %d calls, %d pending", len(operations), len(calls), len(pendingOperations))
+	if len(operations) != 71 || len(calls) != len(operations) {
+		t.Fatalf("%d operations, %d calls", len(operations), len(calls))
 	}
 	keys := make([]string, 0, len(operations))
 	for key := range operations {
@@ -304,12 +302,6 @@ func TestEveryOperationHasAMethod(t *testing.T) {
 	for _, k := range keys {
 		key := operationKey(k)
 		call, ok := calls[key]
-		if pendingOperations[key] {
-			if ok {
-				t.Errorf("%s has an SDK method; remove it from pendingOperations", key)
-			}
-			continue
-		}
 		if !ok {
 			t.Errorf("%s has no SDK method", key)
 			continue
@@ -792,6 +784,87 @@ func TestTeamRolesConflict(t *testing.T) {
 	conflict := mustAs[*ConflictError](t, err)
 	if conflict.Status != 409 || conflict.Code != string(RbacConflictCodeBuiltInRoleImmutable) || conflict.Message != "Built-in roles cannot be changed." {
 		t.Fatalf("%+v", conflict)
+	}
+}
+
+func TestTeamMembersRemove(t *testing.T) {
+	client, fake := newTestClient(t, func(recorded, int) *http.Response {
+		return jsonResponse(200, map[string]any{"message": "The member has been removed from the team."})
+	})
+	ctx := context.Background()
+	resp, err := client.Team.Members.Remove(ctx, "user/1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.Message != "The member has been removed from the team." {
+		t.Fatalf("%+v", resp)
+	}
+	r := fake.all()[0]
+	if r.Method != "DELETE" || r.URL.String() != "https://api.lettermint.co/v1/team/members/user%2F1" {
+		t.Fatal(r.Method, r.URL)
+	}
+	if r.Header.Get("Authorization") != "Bearer "+teamFixture || r.Header.Get("x-lettermint-token") != "" {
+		t.Fatal(r.Header)
+	}
+	if len(r.RawBody) != 0 || r.Header.Get("Content-Type") != "" || r.Header.Get("Idempotency-Key") != "" {
+		t.Fatal(string(r.RawBody), r.Header)
+	}
+
+	// An empty ID is rejected before a request.
+	_, err = client.Team.Members.Remove(ctx, "")
+	if !strings.Contains(mustAs[*ConfigError](t, err).Message, "Team.Members.Remove: userId must be a non-empty string") {
+		t.Fatal(err)
+	}
+	if len(fake.all()) != 1 {
+		t.Fatal(len(fake.all()))
+	}
+}
+
+func TestTeamMembersRemoveConflict(t *testing.T) {
+	client, _ := newTestClient(t, func(recorded, int) *http.Response {
+		return jsonResponse(409, map[string]any{"error": map[string]any{"code": "owner_protected", "message": "The Owner cannot be removed."}})
+	})
+	_, err := client.Team.Members.Remove(context.Background(), "user_1")
+	conflict := mustAs[*ConflictError](t, err)
+	if conflict.Status != 409 || conflict.Code != string(RbacConflictCodeOwnerProtected) || conflict.Message != "The Owner cannot be removed." {
+		t.Fatalf("%+v", conflict)
+	}
+}
+
+func TestTeamMembersProjectFilter(t *testing.T) {
+	client, fake := newTestClient(t, func(r recorded, i int) *http.Response {
+		if i < 2 {
+			return jsonResponse(200, map[string]any{"data": []any{map[string]any{"id": "user_1"}}, "next_cursor": "two"})
+		}
+		return jsonResponse(200, map[string]any{"data": []any{}, "next_cursor": nil})
+	})
+	ctx := context.Background()
+	if _, err := client.Team.Members.List(ctx, &ListTeamMembersQuery{FilterProjectID: "8f8d5d2e-3b1c-4c8e-9f3a-1a2b3c4d5e6f", PageSize: 10}); err != nil {
+		t.Fatal(err)
+	}
+	for _, err := range client.Team.Members.Iterate(ctx, &ListTeamMembersQuery{FilterProjectID: "8f8d5d2e-3b1c-4c8e-9f3a-1a2b3c4d5e6f"}) {
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := client.Team.Members.List(ctx, nil); err != nil {
+		t.Fatal(err)
+	}
+	requests := fake.all()
+	if got := requests[0].URL.String(); got != "https://api.lettermint.co/v1/team/members?page%5Bsize%5D=10&filter%5Bproject_id%5D=8f8d5d2e-3b1c-4c8e-9f3a-1a2b3c4d5e6f" {
+		t.Fatal(got)
+	}
+	// Iterate keeps the filter on every page.
+	for _, r := range requests[1:3] {
+		if r.URL.Query().Get("filter[project_id]") != "8f8d5d2e-3b1c-4c8e-9f3a-1a2b3c4d5e6f" {
+			t.Fatal(r.URL)
+		}
+	}
+	if requests[2].URL.Query().Get("page[cursor]") != "two" {
+		t.Fatal(requests[2].URL)
+	}
+	if len(requests) != 4 || requests[3].URL.RawQuery != "" {
+		t.Fatal(requests[3].URL)
 	}
 }
 

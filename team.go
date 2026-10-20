@@ -101,7 +101,8 @@ func (s *TeamService) DuplicateRole(ctx context.Context, roleID string, body Dup
 // TeamMembersService manages the members of the team. Needs a team token.
 type TeamMembersService struct{ service }
 
-// List returns one page of team members. Pass nil for no query parameters.
+// List returns one page of team members. Pass nil for no query parameters,
+// or set FilterProjectID to list only the members who can access a project.
 func (s *TeamMembersService) List(ctx context.Context, query *ListTeamMembersQuery, options ...RequestOption) (*ListTeamMembersResponse, error) {
 	return callJSON[ListTeamMembersResponse](ctx, s.t, opListTeamMembers, callArgs{label: "Team.Members.List", query: query, options: requestOptions(options)})
 }
@@ -119,6 +120,11 @@ func (s *TeamMembersService) Retrieve(ctx context.Context, userID string, option
 // UpdateAssignment changes a member's role and project access.
 func (s *TeamMembersService) UpdateAssignment(ctx context.Context, userID string, body UpdateTeamMemberAssignmentData, options ...RequestOption) (*TeamMemberData, error) {
 	return callJSON[TeamMemberData](ctx, s.t, opUpdateTeamMemberAssignment, callArgs{label: "Team.Members.UpdateAssignment", path: []string{userID}, body: body, options: requestOptions(options)})
+}
+
+// Remove removes a member from the team. The Owner cannot be removed.
+func (s *TeamMembersService) Remove(ctx context.Context, userID string, options ...RequestOption) (*MessageResponse, error) {
+	return callJSON[MessageResponse](ctx, s.t, opDeleteTeamMember, callArgs{label: "Team.Members.Remove", path: []string{userID}, options: requestOptions(options)})
 }
 
 // TeamInvitesService manages the pending invitations to the team. Needs a
