@@ -59,8 +59,8 @@ type Client struct {
 	Stats *StatsService
 	// Suppressions manages the suppression list. Needs a team token.
 	Suppressions *SuppressionsService
-	// Team manages the team, its members and its invitations. Needs a team
-	// token.
+	// Team manages the team, its roles, members and invitations. Needs a
+	// team token.
 	Team *TeamService
 	// Webhooks manages webhook endpoints and their deliveries. Needs a team
 	// token. To verify incoming deliveries, use NewWebhook.

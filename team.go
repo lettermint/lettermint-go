@@ -65,6 +65,39 @@ func (s *TeamService) Roles(ctx context.Context, options ...RequestOption) (*Tea
 	return callJSON[TeamRoleListResponse](ctx, s.t, opListTeamRoles, callArgs{label: "Team.Roles", options: requestOptions(options)})
 }
 
+// RetrieveRole returns a role.
+func (s *TeamService) RetrieveRole(ctx context.Context, roleID string, options ...RequestOption) (*TeamRoleData, error) {
+	return callJSON[TeamRoleData](ctx, s.t, opGetTeamRole, callArgs{label: "Team.RetrieveRole", path: []string{roleID}, options: requestOptions(options)})
+}
+
+// CreateRole creates a custom role. Custom roles need a plan that includes
+// them, role names are unique within the team, and Permissions must include
+// the permissions that the chosen permissions depend on.
+func (s *TeamService) CreateRole(ctx context.Context, body CreateTeamRoleData, options ...RequestOption) (*TeamRoleData, error) {
+	return callJSON[TeamRoleData](ctx, s.t, opCreateTeamRole, callArgs{label: "Team.CreateRole", body: body, options: requestOptions(options)})
+}
+
+// UpdateRole replaces the name, description and permissions of a custom
+// role. Built-in roles cannot be changed.
+func (s *TeamService) UpdateRole(ctx context.Context, roleID string, body UpdateTeamRoleData, options ...RequestOption) (*TeamRoleData, error) {
+	return callJSON[TeamRoleData](ctx, s.t, opUpdateTeamRole, callArgs{label: "Team.UpdateRole", path: []string{roleID}, body: body, options: requestOptions(options)})
+}
+
+// DeleteRole deletes a custom role. Built-in roles cannot be deleted. Pass
+// nil for no query parameters, or &DeleteTeamRoleQuery{ReplacementRoleID: id}
+// to move the role's members, invitations and SCIM groups to another role;
+// the replacement is required while the role is still assigned.
+func (s *TeamService) DeleteRole(ctx context.Context, roleID string, query *DeleteTeamRoleQuery, options ...RequestOption) (*MessageResponse, error) {
+	return callJSON[MessageResponse](ctx, s.t, opDeleteTeamRole, callArgs{label: "Team.DeleteRole", path: []string{roleID}, query: query, options: requestOptions(options)})
+}
+
+// DuplicateRole copies a role and its permissions under a new name. Without
+// a Description, the copy keeps the description of the source role. The
+// Owner role cannot be duplicated.
+func (s *TeamService) DuplicateRole(ctx context.Context, roleID string, body DuplicateTeamRoleData, options ...RequestOption) (*TeamRoleData, error) {
+	return callJSON[TeamRoleData](ctx, s.t, opDuplicateTeamRole, callArgs{label: "Team.DuplicateRole", path: []string{roleID}, body: body, options: requestOptions(options)})
+}
+
 // TeamMembersService manages the members of the team. Needs a team token.
 type TeamMembersService struct{ service }
 

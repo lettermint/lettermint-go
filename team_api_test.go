@@ -21,6 +21,7 @@ var testIDs = map[string]string{
 	"webhookId":     "webhook_1",
 	"deliveryId":    "delivery_1",
 	"inviteId":      "invite/1",
+	"roleId":        "role/1",
 }
 
 func id(name string) string { return testIDs[name] }
@@ -241,6 +242,26 @@ func operationCalls() map[operationKey]func(context.Context, *Client) error {
 			_, err := c.Team.Invites.Revoke(ctx, id("inviteId"))
 			return err
 		},
+		opGetTeamRole: func(ctx context.Context, c *Client) error {
+			_, err := c.Team.RetrieveRole(ctx, id("roleId"))
+			return err
+		},
+		opCreateTeamRole: func(ctx context.Context, c *Client) error {
+			_, err := c.Team.CreateRole(ctx, CreateTeamRoleData{Name: "Support", Permissions: []RbacPermission{RbacPermissionMembersRead}})
+			return err
+		},
+		opUpdateTeamRole: func(ctx context.Context, c *Client) error {
+			_, err := c.Team.UpdateRole(ctx, id("roleId"), UpdateTeamRoleData{Name: "Support", Permissions: []RbacPermission{RbacPermissionMembersRead}})
+			return err
+		},
+		opDeleteTeamRole: func(ctx context.Context, c *Client) error {
+			_, err := c.Team.DeleteRole(ctx, id("roleId"), nil)
+			return err
+		},
+		opDuplicateTeamRole: func(ctx context.Context, c *Client) error {
+			_, err := c.Team.DuplicateRole(ctx, id("roleId"), DuplicateTeamRoleData{Name: "Support copy"})
+			return err
+		},
 		opUpdateWebhook: func(ctx context.Context, c *Client) error {
 			_, err := c.Webhooks.Update(ctx, id("webhookId"), UpdateWebhookData{BasicAuth: Null[WebhookBasicAuthData]()})
 			return err
@@ -264,15 +285,10 @@ func responseFor(key operationKey) *http.Response {
 	return jsonResponse(op.Response.Status[0], map[string]any{})
 }
 
-// pendingOperations have no SDK method yet. The team role and member removal
-// methods are added by the next PRs in this stack, which remove them here.
+// pendingOperations have no SDK method yet. The member removal method is
+// added by the next PR in this stack, which removes this list.
 var pendingOperations = map[operationKey]bool{
-	opGetTeamRole:       true,
-	opCreateTeamRole:    true,
-	opUpdateTeamRole:    true,
-	opDeleteTeamRole:    true,
-	opDuplicateTeamRole: true,
-	opDeleteTeamMember:  true,
+	opDeleteTeamMember: true,
 }
 
 func TestEveryOperationHasAMethod(t *testing.T) {
@@ -641,6 +657,141 @@ func TestTeamInvitesErrors(t *testing.T) {
 	validation := mustAs[*ValidationError](t, err)
 	if validation.Status != 422 || len(validation.Errors["email"]) != 1 {
 		t.Fatalf("%+v", validation)
+	}
+}
+
+func TestTeamRoles(t *testing.T) {
+	role := func(description any) map[string]any {
+		body := map[string]any{"id": "role/1", "name": "Support", "system_key": nil, "permissions": []any{"members:read", "messages:read"}, "assignable": true}
+		if description != "absent" {
+			body["description"] = description
+		}
+		return body
+	}
+	client, fake := newTestClient(t, func(r recorded, i int) *http.Response {
+		switch {
+		case r.Method == "DELETE":
+			return jsonResponse(200, map[string]any{"message": "The role has been deleted."})
+		case r.Method == "POST":
+			return jsonResponse(201, role("Handles support tickets"))
+		case i == 0:
+			return jsonResponse(200, role("Handles support tickets"))
+		case i == 1:
+			return jsonResponse(200, role(nil))
+		}
+		return jsonResponse(200, role("absent"))
+	})
+	ctx := context.Background()
+
+	described, err := client.Team.RetrieveRole(ctx, "role/1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if description, ok := described.Description.Get(); !ok || description != "Handles support tickets" {
+		t.Fatalf("%+v", described.Description)
+	}
+	if described.ID != "role/1" || described.Name != "Support" || described.SystemKey != nil || !described.Assignable ||
+		!reflect.DeepEqual(described.Permissions, []RbacPermission{RbacPermissionMembersRead, RbacPermissionMessagesRead}) {
+		t.Fatalf("%+v", described)
+	}
+	undescribed, err := client.Team.RetrieveRole(ctx, "role/1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !undescribed.Description.IsNull() {
+		t.Fatalf("%+v", undescribed.Description)
+	}
+	absent, err := client.Team.UpdateRole(ctx, "role/1", UpdateTeamRoleData{Name: "Support", Description: Null[string](), Permissions: []RbacPermission{RbacPermissionMembersRead}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if absent.Description.IsSet() {
+		t.Fatalf("%+v", absent.Description)
+	}
+	created, err := client.Team.CreateRole(ctx, CreateTeamRoleData{Name: "Support", Description: Value("Handles support tickets"), Permissions: []RbacPermission{RbacPermissionMembersRead, RbacPermissionMessagesRead}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if created.ID != "role/1" {
+		t.Fatalf("%+v", created)
+	}
+	if _, err := client.Team.CreateRole(ctx, CreateTeamRoleData{Name: "Viewer", Permissions: []RbacPermission{}}); err != nil {
+		t.Fatal(err)
+	}
+	duplicate, err := client.Team.DuplicateRole(ctx, "role/1", DuplicateTeamRoleData{Name: "Support copy"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if duplicate.Name != "Support" {
+		t.Fatalf("%+v", duplicate)
+	}
+	if _, err := client.Team.DuplicateRole(ctx, "role/1", DuplicateTeamRoleData{Name: "Support copy", Description: Value("Copy")}); err != nil {
+		t.Fatal(err)
+	}
+	deleted, err := client.Team.DeleteRole(ctx, "role/1", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if deleted.Message != "The role has been deleted." {
+		t.Fatalf("%+v", deleted)
+	}
+	if _, err := client.Team.DeleteRole(ctx, "role/1", &DeleteTeamRoleQuery{ReplacementRoleID: "role/2"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := client.Team.DeleteRole(ctx, "role/1", &DeleteTeamRoleQuery{}); err != nil {
+		t.Fatal(err)
+	}
+
+	requests := fake.all()
+	want := []struct{ method, url, body string }{
+		{"GET", "https://api.lettermint.co/v1/team/roles/role%2F1", ""},
+		{"GET", "https://api.lettermint.co/v1/team/roles/role%2F1", ""},
+		{"PUT", "https://api.lettermint.co/v1/team/roles/role%2F1", `{"name":"Support","description":null,"permissions":["members:read"]}`},
+		{"POST", "https://api.lettermint.co/v1/team/roles", `{"name":"Support","description":"Handles support tickets","permissions":["members:read","messages:read"]}`},
+		{"POST", "https://api.lettermint.co/v1/team/roles", `{"name":"Viewer","permissions":[]}`},
+		{"POST", "https://api.lettermint.co/v1/team/roles/role%2F1/duplicate", `{"name":"Support copy"}`},
+		{"POST", "https://api.lettermint.co/v1/team/roles/role%2F1/duplicate", `{"name":"Support copy","description":"Copy"}`},
+		{"DELETE", "https://api.lettermint.co/v1/team/roles/role%2F1", ""},
+		{"DELETE", "https://api.lettermint.co/v1/team/roles/role%2F1?replacement_role_id=role%2F2", ""},
+		{"DELETE", "https://api.lettermint.co/v1/team/roles/role%2F1", ""},
+	}
+	if len(requests) != len(want) {
+		t.Fatal(len(requests))
+	}
+	for i, w := range want {
+		r := requests[i]
+		if r.Method != w.method || r.URL.String() != w.url || string(r.RawBody) != w.body {
+			t.Errorf("%d: %s %s %s, want %s %s %s", i, r.Method, r.URL, r.RawBody, w.method, w.url, w.body)
+		}
+		if r.Header.Get("Authorization") != "Bearer "+teamFixture || r.Header.Get("x-lettermint-token") != "" || r.Header.Get("Idempotency-Key") != "" {
+			t.Errorf("%d: %v", i, r.Header)
+		}
+	}
+
+	// Empty IDs are rejected before a request.
+	for label, call := range map[string]func() error{
+		"Team.RetrieveRole":  func() error { _, err := client.Team.RetrieveRole(ctx, ""); return err },
+		"Team.UpdateRole":    func() error { _, err := client.Team.UpdateRole(ctx, "", UpdateTeamRoleData{}); return err },
+		"Team.DeleteRole":    func() error { _, err := client.Team.DeleteRole(ctx, "", nil); return err },
+		"Team.DuplicateRole": func() error { _, err := client.Team.DuplicateRole(ctx, "", DuplicateTeamRoleData{}); return err },
+	} {
+		if err := call(); !strings.Contains(mustAs[*ConfigError](t, err).Message, label+": roleId must be a non-empty string") {
+			t.Fatal(err)
+		}
+	}
+	if len(fake.all()) != len(want) {
+		t.Fatal(len(fake.all()))
+	}
+}
+
+func TestTeamRolesConflict(t *testing.T) {
+	client, _ := newTestClient(t, func(recorded, int) *http.Response {
+		return jsonResponse(409, map[string]any{"error": map[string]any{"code": "built_in_role_immutable", "message": "Built-in roles cannot be changed."}})
+	})
+	_, err := client.Team.DeleteRole(context.Background(), "role_1", nil)
+	conflict := mustAs[*ConflictError](t, err)
+	if conflict.Status != 409 || conflict.Code != string(RbacConflictCodeBuiltInRoleImmutable) || conflict.Message != "Built-in roles cannot be changed." {
+		t.Fatalf("%+v", conflict)
 	}
 }
 
