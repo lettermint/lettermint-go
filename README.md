@@ -279,11 +279,26 @@ html, err := client.Messages.HTML(ctx, "message-id")
 | `Suppressions` | `List`, `Iterate`, `Create`, `Delete` |
 | `Team` | `Retrieve`, `Update`, `Usage`, `Roles` |
 | `Team.Members` | `List`, `Iterate`, `Retrieve`, `UpdateAssignment` |
+| `Team.Invites` | `List`, `Iterate`, `Retrieve`, `Create`, `Update`, `Revoke` |
 | `Webhooks` | `List`, `Iterate`, `Create`, `Retrieve`, `Update`, `Delete`, `Test`, `RegenerateSecret` |
 | `Webhooks.Deliveries` | `List(ctx, webhookID, …)`, `Iterate(ctx, webhookID, …)`, `Retrieve(ctx, webhookID, deliveryID)`, `Retry(ctx, webhookID, deliveryID)` |
 | (client) | `Ping`, `Analytics`, `AnalyticsPages`, `BlockedFileTypes` |
 
 `Webhooks.Deliveries.Retry` sends a delivery's original payload to the webhook again now, and returns a `*ConflictError` when the delivery cannot be retried.
+
+`Team.Invites.Create` sends the invitation email; the team needs a free seat. `Team.Invites.Update` replaces the email address, role and project access of a pending invitation, and sends a new email only when the address changes.
+
+```go
+invite, err := client.Team.Invites.Create(ctx, lettermint.CreateTeamInviteData{
+	Email:  "jane@example.com",
+	RoleID: "role-id",
+	ProjectAccess: lettermint.CreateTeamInviteDataProjectAccess{
+		Scope:      lettermint.ProjectAccessScopeSelected,
+		ProjectIDs: []string{"project-id"},
+	},
+})
+_, err = client.Team.Invites.Revoke(ctx, invite.ID)
+```
 
 Update requests leave absent fields unchanged. A field that may be cleared is a `Nullable`: `lettermint.Null[T]()` sends `null`.
 
