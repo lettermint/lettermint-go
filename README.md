@@ -277,7 +277,7 @@ html, err := client.Messages.HTML(ctx, "message-id")
 | `Routes` | `List(ctx, projectID, …)`, `Iterate(ctx, projectID, …)`, `Create(ctx, projectID, …)`, `Retrieve`, `Update`, `Delete`, `VerifyInboundDomain` |
 | `Stats` | `Retrieve` |
 | `Suppressions` | `List`, `Iterate`, `Create`, `Delete` |
-| `Team` | `Retrieve`, `Update`, `Usage`, `Roles` |
+| `Team` | `Retrieve`, `Update`, `Usage`, `Roles`, `RetrieveRole`, `CreateRole`, `UpdateRole`, `DeleteRole`, `DuplicateRole` |
 | `Team.Members` | `List`, `Iterate`, `Retrieve`, `UpdateAssignment` |
 | `Team.Invites` | `List`, `Iterate`, `Retrieve`, `Create`, `Update`, `Revoke` |
 | `Webhooks` | `List`, `Iterate`, `Create`, `Retrieve`, `Update`, `Delete`, `Test`, `RegenerateSecret` |
@@ -298,6 +298,17 @@ invite, err := client.Team.Invites.Create(ctx, lettermint.CreateTeamInviteData{
 	},
 })
 _, err = client.Team.Invites.Revoke(ctx, invite.ID)
+```
+
+`Team.CreateRole` creates a custom role, and `Team.UpdateRole` replaces its name, description and permissions; built-in roles cannot be changed or deleted. `Team.DuplicateRole` copies a role under a new name. `Team.DeleteRole` takes a replacement role, which receives the role's members, invitations and SCIM groups; it is required while the role is still assigned. Pass `nil` when the role is unassigned.
+
+```go
+role, err := client.Team.CreateRole(ctx, lettermint.CreateTeamRoleData{
+	Name:        "Support",
+	Description: lettermint.Value("Reads messages and members"),
+	Permissions: []lettermint.RbacPermission{lettermint.RbacPermissionMessagesRead, lettermint.RbacPermissionMembersRead},
+})
+_, err = client.Team.DeleteRole(ctx, role.ID, &lettermint.DeleteTeamRoleQuery{ReplacementRoleID: "other-role-id"})
 ```
 
 Update requests leave absent fields unchanged. A field that may be cleared is a `Nullable`: `lettermint.Null[T]()` sends `null`.
