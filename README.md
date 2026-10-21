@@ -278,13 +278,24 @@ html, err := client.Messages.HTML(ctx, "message-id")
 | `Stats` | `Retrieve` |
 | `Suppressions` | `List`, `Iterate`, `Create`, `Delete` |
 | `Team` | `Retrieve`, `Update`, `Usage`, `Roles`, `RetrieveRole`, `CreateRole`, `UpdateRole`, `DeleteRole`, `DuplicateRole` |
-| `Team.Members` | `List`, `Iterate`, `Retrieve`, `UpdateAssignment` |
+| `Team.Members` | `List`, `Iterate`, `Retrieve`, `UpdateAssignment`, `Remove` |
 | `Team.Invites` | `List`, `Iterate`, `Retrieve`, `Create`, `Update`, `Revoke` |
 | `Webhooks` | `List`, `Iterate`, `Create`, `Retrieve`, `Update`, `Delete`, `Test`, `RegenerateSecret` |
 | `Webhooks.Deliveries` | `List(ctx, webhookID, …)`, `Iterate(ctx, webhookID, …)`, `Retrieve(ctx, webhookID, deliveryID)`, `Retry(ctx, webhookID, deliveryID)` |
 | (client) | `Ping`, `Analytics`, `AnalyticsPages`, `BlockedFileTypes` |
 
 `Webhooks.Deliveries.Retry` sends a delivery's original payload to the webhook again now, and returns a `*ConflictError` when the delivery cannot be retried.
+
+`Team.Members.List` and `Team.Members.Iterate` take `FilterProjectID` to return only the members who can access a project: members with access to all projects and members selected for it. `Team.Members.Remove` removes a member from the team; the Owner cannot be removed.
+
+```go
+for member, err := range client.Team.Members.Iterate(ctx, &lettermint.ListTeamMembersQuery{FilterProjectID: "project-id"}) {
+	if err != nil {
+		return err
+	}
+	fmt.Println(member.Email)
+}
+```
 
 `Team.Invites.Create` sends the invitation email; the team needs a free seat. `Team.Invites.Update` replaces the email address, role and project access of a pending invitation, and sends a new email only when the address changes.
 
