@@ -20,6 +20,7 @@ var testIDs = map[string]string{
 	"userId":        "user/id",
 	"webhookId":     "webhook_1",
 	"deliveryId":    "delivery_1",
+	"inviteId":      "invite/1",
 }
 
 func id(name string) string { return testIDs[name] }
@@ -223,6 +224,23 @@ func operationCalls() map[operationKey]func(context.Context, *Client) error {
 			_, err := c.Team.Members.UpdateAssignment(ctx, id("userId"), UpdateTeamMemberAssignmentData{RoleID: "role_1", ProjectAccess: UpdateTeamMemberAssignmentDataProjectAccess{Scope: ProjectAccessScopeAll}})
 			return err
 		},
+		opListTeamInvites: func(ctx context.Context, c *Client) error { _, err := c.Team.Invites.List(ctx, nil); return err },
+		opGetTeamInvite: func(ctx context.Context, c *Client) error {
+			_, err := c.Team.Invites.Retrieve(ctx, id("inviteId"))
+			return err
+		},
+		opCreateTeamInvite: func(ctx context.Context, c *Client) error {
+			_, err := c.Team.Invites.Create(ctx, CreateTeamInviteData{Email: "jane@example.test", RoleID: "role_1", ProjectAccess: CreateTeamInviteDataProjectAccess{Scope: ProjectAccessScopeAll}})
+			return err
+		},
+		opUpdateTeamInvite: func(ctx context.Context, c *Client) error {
+			_, err := c.Team.Invites.Update(ctx, id("inviteId"), UpdateTeamInviteData{Email: "jane@example.test", RoleID: "role_1", ProjectAccess: UpdateTeamInviteDataProjectAccess{Scope: ProjectAccessScopeAll}})
+			return err
+		},
+		opDeleteTeamInvite: func(ctx context.Context, c *Client) error {
+			_, err := c.Team.Invites.Revoke(ctx, id("inviteId"))
+			return err
+		},
 		opUpdateWebhook: func(ctx context.Context, c *Client) error {
 			_, err := c.Webhooks.Update(ctx, id("webhookId"), UpdateWebhookData{BasicAuth: Null[WebhookBasicAuthData]()})
 			return err
@@ -246,10 +264,21 @@ func responseFor(key operationKey) *http.Response {
 	return jsonResponse(op.Response.Status[0], map[string]any{})
 }
 
+// pendingOperations have no SDK method yet. The team role and member removal
+// methods are added by the next PRs in this stack, which remove them here.
+var pendingOperations = map[operationKey]bool{
+	opGetTeamRole:       true,
+	opCreateTeamRole:    true,
+	opUpdateTeamRole:    true,
+	opDeleteTeamRole:    true,
+	opDuplicateTeamRole: true,
+	opDeleteTeamMember:  true,
+}
+
 func TestEveryOperationHasAMethod(t *testing.T) {
 	calls := operationCalls()
-	if len(operations) != 60 || len(calls) != len(operations) {
-		t.Fatalf("%d operations, %d calls", len(operations), len(calls))
+	if len(operations) != 71 || len(calls)+len(pendingOperations) != len(operations) {
+		t.Fatalf("%d operations, %d calls, %d pending", len(operations), len(calls), len(pendingOperations))
 	}
 	keys := make([]string, 0, len(operations))
 	for key := range operations {
@@ -259,6 +288,12 @@ func TestEveryOperationHasAMethod(t *testing.T) {
 	for _, k := range keys {
 		key := operationKey(k)
 		call, ok := calls[key]
+		if pendingOperations[key] {
+			if ok {
+				t.Errorf("%s has an SDK method; remove it from pendingOperations", key)
+			}
+			continue
+		}
 		if !ok {
 			t.Errorf("%s has no SDK method", key)
 			continue
@@ -472,6 +507,143 @@ func TestWebhookDeliveryNextRetryAt(t *testing.T) {
 	}
 }
 
+func TestTeamInvites(t *testing.T) {
+	invite := map[string]any{
+		"id":    "invite/1",
+		"email": "jane@example.test",
+		"role":  map[string]any{"id": "role_1", "name": "Developer"},
+		"project_access": map[string]any{
+			"scope":    "selected",
+			"projects": []any{map[string]any{"id": "project_1", "name": "Production"}},
+		},
+		"created_at": "2026-10-20T09:00:00Z",
+	}
+	client, fake := newTestClient(t, func(r recorded, _ int) *http.Response {
+		switch {
+		case r.Method == "GET" && r.Path() == "/team/invites":
+			return jsonResponse(200, map[string]any{"data": []any{invite}, "next_cursor": nil})
+		case r.Method == "POST":
+			return jsonResponse(201, invite)
+		case r.Method == "DELETE":
+			return jsonResponse(200, map[string]any{"message": "The invite has been revoked."})
+		}
+		return jsonResponse(200, invite)
+	})
+	ctx := context.Background()
+
+	created, err := client.Team.Invites.Create(ctx, CreateTeamInviteData{
+		Email:         "jane@example.test",
+		RoleID:        "role_1",
+		ProjectAccess: CreateTeamInviteDataProjectAccess{Scope: ProjectAccessScopeSelected, ProjectIDs: []string{"project_1"}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if created.ID != "invite/1" || created.Email != "jane@example.test" || created.Role.ID != "role_1" || created.Role.Name != "Developer" || created.CreatedAt != "2026-10-20T09:00:00Z" {
+		t.Fatalf("%+v", created)
+	}
+	if created.ProjectAccess.Scope != ProjectAccessScopeSelected || len(created.ProjectAccess.Projects) != 1 || created.ProjectAccess.Projects[0].Name != "Production" {
+		t.Fatalf("%+v", created.ProjectAccess)
+	}
+	page, err := client.Team.Invites.List(ctx, &ListTeamInvitesQuery{PageSize: 10, PageCursor: "abc"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(page.Data) != 1 || page.Data[0].Email != "jane@example.test" || page.NextCursor != nil {
+		t.Fatalf("%+v", page)
+	}
+	retrieved, err := client.Team.Invites.Retrieve(ctx, "invite/1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if retrieved.ID != "invite/1" {
+		t.Fatalf("%+v", retrieved)
+	}
+	updated, err := client.Team.Invites.Update(ctx, "invite/1", UpdateTeamInviteData{
+		Email:         "john@example.test",
+		RoleID:        "role_2",
+		ProjectAccess: UpdateTeamInviteDataProjectAccess{Scope: ProjectAccessScopeAll},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if updated.Role.Name != "Developer" {
+		t.Fatalf("%+v", updated)
+	}
+	revoked, err := client.Team.Invites.Revoke(ctx, "invite/1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if revoked.Message != "The invite has been revoked." {
+		t.Fatalf("%+v", revoked)
+	}
+
+	requests := fake.all()
+	want := []struct{ method, url, body string }{
+		{"POST", "https://api.lettermint.co/v1/team/invites", `{"email":"jane@example.test","role_id":"role_1","project_access":{"scope":"selected","project_ids":["project_1"]}}`},
+		{"GET", "https://api.lettermint.co/v1/team/invites?page%5Bsize%5D=10&page%5Bcursor%5D=abc", ""},
+		{"GET", "https://api.lettermint.co/v1/team/invites/invite%2F1", ""},
+		{"PUT", "https://api.lettermint.co/v1/team/invites/invite%2F1", `{"email":"john@example.test","role_id":"role_2","project_access":{"scope":"all"}}`},
+		{"DELETE", "https://api.lettermint.co/v1/team/invites/invite%2F1", ""},
+	}
+	if len(requests) != len(want) {
+		t.Fatal(len(requests))
+	}
+	for i, w := range want {
+		r := requests[i]
+		if r.Method != w.method || r.URL.String() != w.url || string(r.RawBody) != w.body {
+			t.Errorf("%d: %s %s %s, want %s %s %s", i, r.Method, r.URL, r.RawBody, w.method, w.url, w.body)
+		}
+		if r.Header.Get("Authorization") != "Bearer "+teamFixture || r.Header.Get("x-lettermint-token") != "" || r.Header.Get("Idempotency-Key") != "" {
+			t.Errorf("%d: %v", i, r.Header)
+		}
+	}
+
+	// Empty IDs are rejected before a request.
+	_, err = client.Team.Invites.Retrieve(ctx, "")
+	if !strings.Contains(mustAs[*ConfigError](t, err).Message, "Team.Invites.Retrieve: inviteId must be a non-empty string") {
+		t.Fatal(err)
+	}
+	_, err = client.Team.Invites.Update(ctx, "", UpdateTeamInviteData{})
+	if !strings.Contains(mustAs[*ConfigError](t, err).Message, "Team.Invites.Update: inviteId must be a non-empty string") {
+		t.Fatal(err)
+	}
+	_, err = client.Team.Invites.Revoke(ctx, "")
+	if !strings.Contains(mustAs[*ConfigError](t, err).Message, "Team.Invites.Revoke: inviteId must be a non-empty string") {
+		t.Fatal(err)
+	}
+	if len(fake.all()) != len(want) {
+		t.Fatal(len(fake.all()))
+	}
+
+	// Without a team token, no request is sent.
+	sendingOnly, _ := New(WithSendingToken(sendingFixture), WithHTTPClient(&http.Client{Transport: &fakeTransport{handle: func(recorded, int) *http.Response { return nil }}}))
+	_, err = sendingOnly.Team.Invites.List(ctx, nil)
+	if !strings.Contains(mustAs[*ConfigError](t, err).Message, "Team.Invites.List needs a team token") {
+		t.Fatal(err)
+	}
+}
+
+func TestTeamInvitesErrors(t *testing.T) {
+	responses := []*http.Response{
+		jsonResponse(409, map[string]any{"error": map[string]any{"code": "stale_resource", "message": "The team has no free seat."}}),
+		jsonResponse(422, map[string]any{"message": "The email field must be a valid email address.", "errors": map[string]any{"email": []any{"The email field must be a valid email address."}}}),
+	}
+	client, _ := newTestClient(t, func(_ recorded, i int) *http.Response { return responses[i] })
+	ctx := context.Background()
+	body := CreateTeamInviteData{Email: "jane@example.test", RoleID: "role_1", ProjectAccess: CreateTeamInviteDataProjectAccess{Scope: ProjectAccessScopeAll}}
+	_, err := client.Team.Invites.Create(ctx, body)
+	conflict := mustAs[*ConflictError](t, err)
+	if conflict.Status != 409 || conflict.Code != "stale_resource" || conflict.Message != "The team has no free seat." {
+		t.Fatalf("%+v", conflict)
+	}
+	_, err = client.Team.Invites.Update(ctx, "invite_1", UpdateTeamInviteData{Email: "not-an-email", RoleID: "role_1", ProjectAccess: UpdateTeamInviteDataProjectAccess{Scope: ProjectAccessScopeAll}})
+	validation := mustAs[*ValidationError](t, err)
+	if validation.Status != 422 || len(validation.Errors["email"]) != 1 {
+		t.Fatalf("%+v", validation)
+	}
+}
+
 func query(r recorded) map[string]string {
 	result := map[string]string{}
 	for key, values := range r.URL.Query() {
@@ -587,6 +759,7 @@ func TestEveryListIterates(t *testing.T) {
 		"routes":         func(c *Client) func(func(any, error) bool) { return anySeq(c.Routes.Iterate(ctx, "p", nil)) },
 		"suppressions":   func(c *Client) func(func(any, error) bool) { return anySeq(c.Suppressions.Iterate(ctx, nil)) },
 		"team members":   func(c *Client) func(func(any, error) bool) { return anySeq(c.Team.Members.Iterate(ctx, nil)) },
+		"team invites":   func(c *Client) func(func(any, error) bool) { return anySeq(c.Team.Invites.Iterate(ctx, nil)) },
 		"webhooks":       func(c *Client) func(func(any, error) bool) { return anySeq(c.Webhooks.Iterate(ctx, nil)) },
 		"webhook deliveries": func(c *Client) func(func(any, error) bool) {
 			return anySeq(c.Webhooks.Deliveries.Iterate(ctx, "w", nil))

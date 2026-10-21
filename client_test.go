@@ -210,6 +210,7 @@ func TestTokensNeverShow(t *testing.T) {
 		"suppressions":       client.Suppressions,
 		"team":               client.Team,
 		"team members":       client.Team.Members,
+		"team invites":       client.Team.Invites,
 		"webhooks":           client.Webhooks,
 		"webhook deliveries": client.Webhooks.Deliveries,
 		"builder":            client.Emails.Compose().From("a@example.test").To("b@example.test"),

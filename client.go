@@ -59,7 +59,8 @@ type Client struct {
 	Stats *StatsService
 	// Suppressions manages the suppression list. Needs a team token.
 	Suppressions *SuppressionsService
-	// Team manages the team and its members. Needs a team token.
+	// Team manages the team, its members and its invitations. Needs a team
+	// token.
 	Team *TeamService
 	// Webhooks manages webhook endpoints and their deliveries. Needs a team
 	// token. To verify incoming deliveries, use NewWebhook.
@@ -187,7 +188,7 @@ func newClient(config clientConfig) (*Client, error) {
 		Routes:       &RoutesService{service{t, "RoutesService"}},
 		Stats:        &StatsService{service{t, "StatsService"}},
 		Suppressions: &SuppressionsService{service{t, "SuppressionsService"}},
-		Team:         &TeamService{service: service{t, "TeamService"}, Members: &TeamMembersService{service{t, "TeamMembersService"}}},
+		Team:         &TeamService{service: service{t, "TeamService"}, Members: &TeamMembersService{service{t, "TeamMembersService"}}, Invites: &TeamInvitesService{service{t, "TeamInvitesService"}}},
 		Webhooks:     &WebhooksService{service: service{t, "WebhooksService"}, Deliveries: &WebhookDeliveriesService{service{t, "WebhookDeliveriesService"}}},
 	}, nil
 }

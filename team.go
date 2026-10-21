@@ -41,6 +41,8 @@ type TeamService struct {
 	service
 	// Members manages the members of the team.
 	Members *TeamMembersService
+	// Invites manages the pending invitations to the team.
+	Invites *TeamInvitesService
 }
 
 // Retrieve returns the team. Pass nil for no query parameters.
@@ -84,4 +86,42 @@ func (s *TeamMembersService) Retrieve(ctx context.Context, userID string, option
 // UpdateAssignment changes a member's role and project access.
 func (s *TeamMembersService) UpdateAssignment(ctx context.Context, userID string, body UpdateTeamMemberAssignmentData, options ...RequestOption) (*TeamMemberData, error) {
 	return callJSON[TeamMemberData](ctx, s.t, opUpdateTeamMemberAssignment, callArgs{label: "Team.Members.UpdateAssignment", path: []string{userID}, body: body, options: requestOptions(options)})
+}
+
+// TeamInvitesService manages the pending invitations to the team. Needs a
+// team token.
+type TeamInvitesService struct{ service }
+
+// List returns one page of pending invitations. Pass nil for no query
+// parameters.
+func (s *TeamInvitesService) List(ctx context.Context, query *ListTeamInvitesQuery, options ...RequestOption) (*ListTeamInvitesResponse, error) {
+	return callJSON[ListTeamInvitesResponse](ctx, s.t, opListTeamInvites, callArgs{label: "Team.Invites.List", query: query, options: requestOptions(options)})
+}
+
+// Iterate yields every pending invitation, following next_cursor.
+func (s *TeamInvitesService) Iterate(ctx context.Context, query *ListTeamInvitesQuery, options ...RequestOption) iter.Seq2[TeamInviteData, error] {
+	return iterate[TeamInviteData](ctx, s.t, opListTeamInvites, callArgs{label: "Team.Invites.Iterate", query: query, options: requestOptions(options)})
+}
+
+// Retrieve returns a pending invitation.
+func (s *TeamInvitesService) Retrieve(ctx context.Context, inviteID string, options ...RequestOption) (*TeamInviteData, error) {
+	return callJSON[TeamInviteData](ctx, s.t, opGetTeamInvite, callArgs{label: "Team.Invites.Retrieve", path: []string{inviteID}, options: requestOptions(options)})
+}
+
+// Create invites a person to the team with a role and project access, and
+// sends the invitation email. The team needs a free seat, and the Owner role
+// cannot be assigned.
+func (s *TeamInvitesService) Create(ctx context.Context, body CreateTeamInviteData, options ...RequestOption) (*TeamInviteData, error) {
+	return callJSON[TeamInviteData](ctx, s.t, opCreateTeamInvite, callArgs{label: "Team.Invites.Create", body: body, options: requestOptions(options)})
+}
+
+// Update replaces the email address, role and project access of a pending
+// invitation. A new invitation email is sent only when the address changes.
+func (s *TeamInvitesService) Update(ctx context.Context, inviteID string, body UpdateTeamInviteData, options ...RequestOption) (*TeamInviteData, error) {
+	return callJSON[TeamInviteData](ctx, s.t, opUpdateTeamInvite, callArgs{label: "Team.Invites.Update", path: []string{inviteID}, body: body, options: requestOptions(options)})
+}
+
+// Revoke revokes a pending invitation.
+func (s *TeamInvitesService) Revoke(ctx context.Context, inviteID string, options ...RequestOption) (*MessageResponse, error) {
+	return callJSON[MessageResponse](ctx, s.t, opDeleteTeamInvite, callArgs{label: "Team.Invites.Revoke", path: []string{inviteID}, options: requestOptions(options)})
 }
