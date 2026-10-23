@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## v3.2.0 - 2026-10-23
+
+### What's Changed
+
+* feat: add messages resend by @bjarn in https://github.com/lettermint/lettermint-go/pull/37
+* feat: add per-email idempotency keys to batch send by @bjarn in https://github.com/lettermint/lettermint-go/pull/38
+* ci: bump actions/create-github-app-token from 3.2.0 to 3.3.0 by @dependabot[bot] in https://github.com/lettermint/lettermint-go/pull/41
+* feat: add webhook delivery retry by @bjarn in https://github.com/lettermint/lettermint-go/pull/40
+* feat: add team invites by @bjarn in https://github.com/lettermint/lettermint-go/pull/42
+* feat: add team role management by @bjarn in https://github.com/lettermint/lettermint-go/pull/43
+* feat: add team member removal and a project filter for the member list by @bjarn in https://github.com/lettermint/lettermint-go/pull/44
+
+**Full Changelog**: https://github.com/lettermint/lettermint-go/compare/v3.1.0...v3.2.0
+
 ## v3.1.0 - 2026-10-11
 
 ### What's Changed
