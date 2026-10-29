@@ -43,6 +43,8 @@ type TeamService struct {
 	Members *TeamMembersService
 	// Invites manages the pending invitations to the team.
 	Invites *TeamInvitesService
+	// APITokens manages the Team API tokens of the team.
+	APITokens *TeamAPITokensService
 }
 
 // Retrieve returns the team. Pass nil for no query parameters.
@@ -163,4 +165,33 @@ func (s *TeamInvitesService) Update(ctx context.Context, inviteID string, body U
 // Revoke revokes a pending invitation.
 func (s *TeamInvitesService) Revoke(ctx context.Context, inviteID string, options ...RequestOption) (*MessageResponse, error) {
 	return callJSON[MessageResponse](ctx, s.t, opDeleteTeamInvite, callArgs{label: "Team.Invites.Revoke", path: []string{inviteID}, options: requestOptions(options)})
+}
+
+// TeamAPITokensService manages the Team API tokens of the team. Needs a team
+// token.
+type TeamAPITokensService struct{ service }
+
+// List returns one page of the team's API tokens, without their values. Pass
+// nil for no query parameters.
+func (s *TeamAPITokensService) List(ctx context.Context, query *ListTeamApiTokensQuery, options ...RequestOption) (*ListTeamApiTokensResponse, error) {
+	return callJSON[ListTeamApiTokensResponse](ctx, s.t, opListTeamApiTokens, callArgs{label: "Team.APITokens.List", query: query, options: requestOptions(options)})
+}
+
+// Iterate yields every API token of the team, following next_cursor.
+func (s *TeamAPITokensService) Iterate(ctx context.Context, query *ListTeamApiTokensQuery, options ...RequestOption) iter.Seq2[TeamApiToken, error] {
+	return iterate[TeamApiToken](ctx, s.t, opListTeamApiTokens, callArgs{label: "Team.APITokens.Iterate", query: query, options: requestOptions(options)})
+}
+
+// Create creates a Team API token. The response holds its value once
+// (Data.Token). The new token can only have abilities that the requesting
+// token has. It copies the requesting token's IP allowlist, and it can't
+// outlive the requesting token: ExpiresAt defaults to, and can't be later
+// than, the requesting token's expiry.
+func (s *TeamAPITokensService) Create(ctx context.Context, body StoreTeamApiTokenData, options ...RequestOption) (*TeamApiTokenCreatedResponse, error) {
+	return callJSON[TeamApiTokenCreatedResponse](ctx, s.t, opCreateTeamApiToken, callArgs{label: "Team.APITokens.Create", body: body, options: requestOptions(options)})
+}
+
+// Delete deletes a Team API token.
+func (s *TeamAPITokensService) Delete(ctx context.Context, tokenID string, options ...RequestOption) (*MessageResponse, error) {
+	return callJSON[MessageResponse](ctx, s.t, opDeleteTeamApiToken, callArgs{label: "Team.APITokens.Delete", path: []string{tokenID}, options: requestOptions(options)})
 }
