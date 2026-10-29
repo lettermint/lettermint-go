@@ -274,6 +274,7 @@ html, err := client.Messages.HTML(ctx, "message-id")
 | `Messages` | `List`, `Iterate`, `Retrieve`, `Events`, `IterateEvents`, `Source`, `HTML`, `Text`, `Reschedule`, `Cancel`, `Process`, `Resend` |
 | `Projects` | `List`, `Iterate`, `Create`, `Retrieve`, `Update`, `Delete`, `RotateToken` |
 | `Projects.ReportForwarding` | `Retrieve`, `Update`, `Delete`, `Verify`, `ResendCode` |
+| `Projects.APITokens` | `List(ctx, projectID, …)`, `Iterate(ctx, projectID, …)`, `Create(ctx, projectID, …)`, `Delete(ctx, projectID, tokenID)` |
 | `Routes` | `List(ctx, projectID, …)`, `Iterate(ctx, projectID, …)`, `Create(ctx, projectID, …)`, `Retrieve`, `Update`, `Delete`, `VerifyInboundDomain` |
 | `Stats` | `Retrieve` |
 | `Suppressions` | `List`, `Iterate`, `Create`, `Delete` |
@@ -285,6 +286,17 @@ html, err := client.Messages.HTML(ctx, "message-id")
 | (client) | `Ping`, `Analytics`, `AnalyticsPages`, `BlockedFileTypes` |
 
 `Webhooks.Deliveries.Retry` sends a delivery's original payload to the webhook again now, and returns a `*ConflictError` when the delivery cannot be retried.
+
+`Projects.APITokens.Create` creates a Project API token. The response holds the token's value once, in `Data.Token`: use it to send through the API, or as the SMTP password when SMTP is enabled for the project (`SMTP` then holds the host, ports and user name, otherwise it is `nil`). `ShortToken` creates a shorter token for devices that limit the password length. `Projects.APITokens.List` and `Projects.APITokens.Iterate` list the project's tokens without their values.
+
+```go
+created, err := client.Projects.APITokens.Create(ctx, "project-id", lettermint.StoreProjectApiTokenData{Name: "Production server"})
+if err != nil {
+	return err
+}
+token := created.Data.Token // the token's value, shown once: store it now
+_, err = client.Projects.APITokens.Delete(ctx, "project-id", created.Data.ID)
+```
 
 `Team.Members.List` and `Team.Members.Iterate` take `FilterProjectID` to return only the members who can access a project: members with access to all projects and members selected for it. `Team.Members.Remove` removes a member from the team; the Owner cannot be removed.
 

@@ -10,6 +10,8 @@ type ProjectsService struct {
 	service
 	// ReportForwarding manages the DMARC and complaint report forwarding of a project.
 	ReportForwarding *ReportForwardingService
+	// APITokens manages the Project API tokens of a project.
+	APITokens *ProjectAPITokensService
 }
 
 // List returns one page of projects. Pass nil for no query parameters.
@@ -44,7 +46,8 @@ func (s *ProjectsService) Delete(ctx context.Context, projectID string, options 
 
 // RotateToken rotates the project's legacy sending token.
 //
-// Deprecated: the API marks this endpoint as legacy.
+// Deprecated: the API marks this endpoint as legacy. Use APITokens to list,
+// create and delete specific tokens.
 func (s *ProjectsService) RotateToken(ctx context.Context, projectID string, options ...RequestOption) (*RotateProjectTokenResponse, error) {
 	return callJSON[RotateProjectTokenResponse](ctx, s.t, opRotateProjectToken, callArgs{label: "Projects.RotateToken", path: []string{projectID}, options: requestOptions(options)})
 }
@@ -76,4 +79,32 @@ func (s *ReportForwardingService) Verify(ctx context.Context, projectID string, 
 // ResendCode sends a new verification code to the forwarding address.
 func (s *ReportForwardingService) ResendCode(ctx context.Context, projectID string, options ...RequestOption) (*ResendReportForwardingCodeResponse, error) {
 	return callJSON[ResendReportForwardingCodeResponse](ctx, s.t, opResendReportForwardingCode, callArgs{label: "Projects.ReportForwarding.ResendCode", path: []string{projectID}, options: requestOptions(options)})
+}
+
+// ProjectAPITokensService manages the Project API tokens of a project. Needs
+// a team token.
+type ProjectAPITokensService struct{ service }
+
+// List returns one page of the project's API tokens, without their values.
+// Pass nil for no query parameters.
+func (s *ProjectAPITokensService) List(ctx context.Context, projectID string, query *ListProjectApiTokensQuery, options ...RequestOption) (*ListProjectApiTokensResponse, error) {
+	return callJSON[ListProjectApiTokensResponse](ctx, s.t, opListProjectApiTokens, callArgs{label: "Projects.APITokens.List", path: []string{projectID}, query: query, options: requestOptions(options)})
+}
+
+// Iterate yields every API token of the project, following next_cursor.
+func (s *ProjectAPITokensService) Iterate(ctx context.Context, projectID string, query *ListProjectApiTokensQuery, options ...RequestOption) iter.Seq2[ProjectApiToken, error] {
+	return iterate[ProjectApiToken](ctx, s.t, opListProjectApiTokens, callArgs{label: "Projects.APITokens.Iterate", path: []string{projectID}, query: query, options: requestOptions(options)})
+}
+
+// Create creates a Project API token. The response holds its value once
+// (Data.Token): use it to send through the API, or as the SMTP password when
+// SMTP is enabled for the project (SMTP is nil otherwise). Set ShortToken for
+// devices that limit the password length.
+func (s *ProjectAPITokensService) Create(ctx context.Context, projectID string, body StoreProjectApiTokenData, options ...RequestOption) (*ProjectApiTokenCreatedResponse, error) {
+	return callJSON[ProjectApiTokenCreatedResponse](ctx, s.t, opCreateProjectApiToken, callArgs{label: "Projects.APITokens.Create", path: []string{projectID}, body: body, options: requestOptions(options)})
+}
+
+// Delete deletes a Project API token.
+func (s *ProjectAPITokensService) Delete(ctx context.Context, projectID, tokenID string, options ...RequestOption) (*MessageResponse, error) {
+	return callJSON[MessageResponse](ctx, s.t, opDeleteProjectApiToken, callArgs{label: "Projects.APITokens.Delete", path: []string{projectID, tokenID}, options: requestOptions(options)})
 }
