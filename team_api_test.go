@@ -22,6 +22,7 @@ var testIDs = map[string]string{
 	"deliveryId":    "delivery_1",
 	"inviteId":      "invite/1",
 	"roleId":        "role/1",
+	"tokenId":       "token/1",
 }
 
 func id(name string) string { return testIDs[name] }
@@ -168,6 +169,18 @@ func operationCalls() map[operationKey]func(context.Context, *Client) error {
 			_, err := c.Projects.ReportForwarding.Verify(ctx, id("projectId"), VerifyReportForwardingRequest{Code: "123456"})
 			return err
 		},
+		opListProjectApiTokens: func(ctx context.Context, c *Client) error {
+			_, err := c.Projects.APITokens.List(ctx, id("projectId"), nil)
+			return err
+		},
+		opCreateProjectApiToken: func(ctx context.Context, c *Client) error {
+			_, err := c.Projects.APITokens.Create(ctx, id("projectId"), StoreProjectApiTokenData{Name: "Production server"})
+			return err
+		},
+		opDeleteProjectApiToken: func(ctx context.Context, c *Client) error {
+			_, err := c.Projects.APITokens.Delete(ctx, id("projectId"), id("tokenId"))
+			return err
+		},
 		opRotateProjectToken: func(ctx context.Context, c *Client) error {
 			_, err := c.Projects.RotateToken(ctx, id("projectId")) //nolint:staticcheck // the deprecated endpoint is still callable
 			return err
@@ -289,10 +302,18 @@ func responseFor(key operationKey) *http.Response {
 	return jsonResponse(op.Response.Status[0], map[string]any{})
 }
 
+// pendingOperations have no SDK method yet. The Team API token methods are
+// added by the next PR in this stack, which removes this list.
+var pendingOperations = map[operationKey]bool{
+	opListTeamApiTokens:  true,
+	opCreateTeamApiToken: true,
+	opDeleteTeamApiToken: true,
+}
+
 func TestEveryOperationHasAMethod(t *testing.T) {
 	calls := operationCalls()
-	if len(operations) != 71 || len(calls) != len(operations) {
-		t.Fatalf("%d operations, %d calls", len(operations), len(calls))
+	if len(operations) != 77 || len(calls)+len(pendingOperations) != len(operations) {
+		t.Fatalf("%d operations, %d calls, %d pending", len(operations), len(calls), len(pendingOperations))
 	}
 	keys := make([]string, 0, len(operations))
 	for key := range operations {
@@ -302,6 +323,12 @@ func TestEveryOperationHasAMethod(t *testing.T) {
 	for _, k := range keys {
 		key := operationKey(k)
 		call, ok := calls[key]
+		if pendingOperations[key] {
+			if ok {
+				t.Errorf("%s has an SDK method; remove it from pendingOperations", key)
+			}
+			continue
+		}
 		if !ok {
 			t.Errorf("%s has no SDK method", key)
 			continue
@@ -868,6 +895,141 @@ func TestTeamMembersProjectFilter(t *testing.T) {
 	}
 }
 
+func TestProjectAPITokens(t *testing.T) {
+	token := map[string]any{
+		"id":           "token/1",
+		"project_id":   "project/1",
+		"name":         "Production server",
+		"short_token":  false,
+		"created_via":  "api",
+		"allowed_ips":  []any{},
+		"last_used_at": nil,
+		"created_at":   "2026-10-28T09:00:00Z",
+	}
+	created := map[string]any{}
+	for key, value := range token {
+		created[key] = value
+	}
+	created["token"] = "lm_secret_value"
+	client, fake := newTestClient(t, func(r recorded, i int) *http.Response {
+		switch {
+		case r.Method == "GET":
+			return jsonResponse(200, map[string]any{"data": []any{token}, "next_cursor": nil})
+		case r.Method == "DELETE":
+			return jsonResponse(200, map[string]any{"message": "The API token has been deleted."})
+		case i == 0:
+			return jsonResponse(201, map[string]any{
+				"data":    created,
+				"smtp":    map[string]any{"host": "smtp.lettermint.co", "ports": []any{465, 587}, "username": "lettermint"},
+				"message": "The API token has been created.",
+			})
+		}
+		return jsonResponse(201, map[string]any{"data": created, "smtp": nil, "message": "The API token has been created."})
+	})
+	ctx := context.Background()
+
+	withSMTP, err := client.Projects.APITokens.Create(ctx, "project/1", StoreProjectApiTokenData{Name: "Production server"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if withSMTP.Data.ID != "token/1" || withSMTP.Data.ProjectID != "project/1" || withSMTP.Data.Token != "lm_secret_value" || withSMTP.Data.ShortToken ||
+		withSMTP.Data.CreatedVia == nil || *withSMTP.Data.CreatedVia != ApiTokenSourceAPI || withSMTP.Message != "The API token has been created." {
+		t.Fatalf("%+v", withSMTP)
+	}
+	if withSMTP.SMTP == nil || withSMTP.SMTP.Host != "smtp.lettermint.co" || !reflect.DeepEqual(withSMTP.SMTP.Ports, []int{465, 587}) || withSMTP.SMTP.Username != "lettermint" {
+		t.Fatalf("%+v", withSMTP.SMTP)
+	}
+	withoutSMTP, err := client.Projects.APITokens.Create(ctx, "project/1", StoreProjectApiTokenData{Name: "Printer", ShortToken: Ptr(true)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if withoutSMTP.SMTP != nil || withoutSMTP.Data.Token != "lm_secret_value" {
+		t.Fatalf("%+v", withoutSMTP)
+	}
+	page, err := client.Projects.APITokens.List(ctx, "project/1", &ListProjectApiTokensQuery{PageSize: 10, PageCursor: "abc", Sort: []ListProjectApiTokensQuerySortItem{ListProjectApiTokensQuerySortItemCreatedAtDesc}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(page.Data) != 1 || page.Data[0].Name != "Production server" || page.Data[0].LastUsedAt != nil || len(page.Data[0].AllowedIPs) != 0 || page.NextCursor != nil {
+		t.Fatalf("%+v", page)
+	}
+	if _, err := client.Projects.APITokens.List(ctx, "project/1", nil); err != nil {
+		t.Fatal(err)
+	}
+	deleted, err := client.Projects.APITokens.Delete(ctx, "project/1", "token/1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if deleted.Message != "The API token has been deleted." {
+		t.Fatalf("%+v", deleted)
+	}
+
+	requests := fake.all()
+	want := []struct{ method, url, body string }{
+		{"POST", "https://api.lettermint.co/v1/projects/project%2F1/api-tokens", `{"name":"Production server"}`},
+		{"POST", "https://api.lettermint.co/v1/projects/project%2F1/api-tokens", `{"name":"Printer","short_token":true}`},
+		{"GET", "https://api.lettermint.co/v1/projects/project%2F1/api-tokens?page%5Bsize%5D=10&page%5Bcursor%5D=abc&sort=-created_at", ""},
+		{"GET", "https://api.lettermint.co/v1/projects/project%2F1/api-tokens", ""},
+		{"DELETE", "https://api.lettermint.co/v1/projects/project%2F1/api-tokens/token%2F1", ""},
+	}
+	if len(requests) != len(want) {
+		t.Fatal(len(requests))
+	}
+	for i, w := range want {
+		r := requests[i]
+		if r.Method != w.method || r.URL.String() != w.url || string(r.RawBody) != w.body {
+			t.Errorf("%d: %s %s %s, want %s %s %s", i, r.Method, r.URL, r.RawBody, w.method, w.url, w.body)
+		}
+		if r.Header.Get("Authorization") != "Bearer "+teamFixture || r.Header.Get("x-lettermint-token") != "" || r.Header.Get("Idempotency-Key") != "" {
+			t.Errorf("%d: %v", i, r.Header)
+		}
+	}
+
+	// Empty IDs are rejected before a request.
+	for label, call := range map[string]func() error{
+		"Projects.APITokens.List: projectId": func() error { _, err := client.Projects.APITokens.List(ctx, "", nil); return err },
+		"Projects.APITokens.Create: projectId": func() error {
+			_, err := client.Projects.APITokens.Create(ctx, "", StoreProjectApiTokenData{Name: "x"})
+			return err
+		},
+		"Projects.APITokens.Delete: projectId": func() error { _, err := client.Projects.APITokens.Delete(ctx, "", "t"); return err },
+		"Projects.APITokens.Delete: tokenId":   func() error { _, err := client.Projects.APITokens.Delete(ctx, "p", ""); return err },
+	} {
+		if err := call(); !strings.Contains(mustAs[*ConfigError](t, err).Message, label+" must be a non-empty string") {
+			t.Fatal(err)
+		}
+	}
+	if len(fake.all()) != len(want) {
+		t.Fatal(len(fake.all()))
+	}
+
+	// Without a team token, no request is sent.
+	sendingOnly, _ := New(WithSendingToken(sendingFixture), WithHTTPClient(&http.Client{Transport: &fakeTransport{handle: func(recorded, int) *http.Response { return nil }}}))
+	_, err = sendingOnly.Projects.APITokens.Create(ctx, "p", StoreProjectApiTokenData{Name: "x"})
+	if !strings.Contains(mustAs[*ConfigError](t, err).Message, "Projects.APITokens.Create needs a team token") {
+		t.Fatal(err)
+	}
+}
+
+func TestProjectAPITokensErrors(t *testing.T) {
+	responses := []*http.Response{
+		jsonResponse(422, map[string]any{"message": "The name field is required.", "errors": map[string]any{"name": []any{"The name field is required."}}}),
+		jsonResponse(404, map[string]any{"message": "Not Found"}),
+	}
+	client, _ := newTestClient(t, func(_ recorded, i int) *http.Response { return responses[i] })
+	ctx := context.Background()
+	_, err := client.Projects.APITokens.Create(ctx, "p", StoreProjectApiTokenData{})
+	validation := mustAs[*ValidationError](t, err)
+	if validation.Status != 422 || len(validation.Errors["name"]) != 1 {
+		t.Fatalf("%+v", validation)
+	}
+	_, err = client.Projects.APITokens.Delete(ctx, "p", "missing")
+	notFound := mustAs[*NotFoundError](t, err)
+	if notFound.Status != 404 {
+		t.Fatalf("%+v", notFound)
+	}
+}
+
 func query(r recorded) map[string]string {
 	result := map[string]string{}
 	for key, values := range r.URL.Query() {
@@ -980,11 +1142,14 @@ func TestEveryListIterates(t *testing.T) {
 		"messages":       func(c *Client) func(func(any, error) bool) { return anySeq(c.Messages.Iterate(ctx, nil)) },
 		"message events": func(c *Client) func(func(any, error) bool) { return anySeq(c.Messages.IterateEvents(ctx, "m", nil)) },
 		"projects":       func(c *Client) func(func(any, error) bool) { return anySeq(c.Projects.Iterate(ctx, nil)) },
-		"routes":         func(c *Client) func(func(any, error) bool) { return anySeq(c.Routes.Iterate(ctx, "p", nil)) },
-		"suppressions":   func(c *Client) func(func(any, error) bool) { return anySeq(c.Suppressions.Iterate(ctx, nil)) },
-		"team members":   func(c *Client) func(func(any, error) bool) { return anySeq(c.Team.Members.Iterate(ctx, nil)) },
-		"team invites":   func(c *Client) func(func(any, error) bool) { return anySeq(c.Team.Invites.Iterate(ctx, nil)) },
-		"webhooks":       func(c *Client) func(func(any, error) bool) { return anySeq(c.Webhooks.Iterate(ctx, nil)) },
+		"project API tokens": func(c *Client) func(func(any, error) bool) {
+			return anySeq(c.Projects.APITokens.Iterate(ctx, "p", nil))
+		},
+		"routes":       func(c *Client) func(func(any, error) bool) { return anySeq(c.Routes.Iterate(ctx, "p", nil)) },
+		"suppressions": func(c *Client) func(func(any, error) bool) { return anySeq(c.Suppressions.Iterate(ctx, nil)) },
+		"team members": func(c *Client) func(func(any, error) bool) { return anySeq(c.Team.Members.Iterate(ctx, nil)) },
+		"team invites": func(c *Client) func(func(any, error) bool) { return anySeq(c.Team.Invites.Iterate(ctx, nil)) },
+		"webhooks":     func(c *Client) func(func(any, error) bool) { return anySeq(c.Webhooks.Iterate(ctx, nil)) },
 		"webhook deliveries": func(c *Client) func(func(any, error) bool) {
 			return anySeq(c.Webhooks.Deliveries.Iterate(ctx, "w", nil))
 		},

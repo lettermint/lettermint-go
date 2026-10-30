@@ -51,7 +51,8 @@ type Client struct {
 	Domains *DomainsService
 	// Messages reads sent and received messages. Needs a team token.
 	Messages *MessagesService
-	// Projects manages projects and their report forwarding. Needs a team token.
+	// Projects manages projects, their report forwarding and their API tokens.
+	// Needs a team token.
 	Projects *ProjectsService
 	// Routes manages the routes of a project. Needs a team token.
 	Routes *RoutesService
@@ -184,7 +185,7 @@ func newClient(config clientConfig) (*Client, error) {
 		Emails:       &EmailsService{service{t, "EmailsService"}},
 		Domains:      &DomainsService{service{t, "DomainsService"}},
 		Messages:     &MessagesService{service{t, "MessagesService"}},
-		Projects:     &ProjectsService{service: service{t, "ProjectsService"}, ReportForwarding: &ReportForwardingService{service{t, "ReportForwardingService"}}},
+		Projects:     &ProjectsService{service: service{t, "ProjectsService"}, ReportForwarding: &ReportForwardingService{service{t, "ReportForwardingService"}}, APITokens: &ProjectAPITokensService{service{t, "ProjectAPITokensService"}}},
 		Routes:       &RoutesService{service{t, "RoutesService"}},
 		Stats:        &StatsService{service{t, "StatsService"}},
 		Suppressions: &SuppressionsService{service{t, "SuppressionsService"}},
