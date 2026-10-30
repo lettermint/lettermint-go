@@ -281,6 +281,7 @@ html, err := client.Messages.HTML(ctx, "message-id")
 | `Team` | `Retrieve`, `Update`, `Usage`, `Roles`, `RetrieveRole`, `CreateRole`, `UpdateRole`, `DeleteRole`, `DuplicateRole` |
 | `Team.Members` | `List`, `Iterate`, `Retrieve`, `UpdateAssignment`, `Remove` |
 | `Team.Invites` | `List`, `Iterate`, `Retrieve`, `Create`, `Update`, `Revoke` |
+| `Team.APITokens` | `List`, `Iterate`, `Create`, `Delete` |
 | `Webhooks` | `List`, `Iterate`, `Create`, `Retrieve`, `Update`, `Delete`, `Test`, `RegenerateSecret` |
 | `Webhooks.Deliveries` | `List(ctx, webhookID, …)`, `Iterate(ctx, webhookID, …)`, `Retrieve(ctx, webhookID, deliveryID)`, `Retry(ctx, webhookID, deliveryID)` |
 | (client) | `Ping`, `Analytics`, `AnalyticsPages`, `BlockedFileTypes` |
@@ -296,6 +297,21 @@ if err != nil {
 }
 token := created.Data.Token // the token's value, shown once: store it now
 _, err = client.Projects.APITokens.Delete(ctx, "project-id", created.Data.ID)
+```
+
+`Team.APITokens.Create` creates a Team API token. The new token can only have abilities that the requesting token has. It copies the requesting token's IP allowlist, and it can't outlive the requesting token: `ExpiresAt` defaults to, and can't be later than, the requesting token's expiry. The response holds the token's value once, in `Data.Token`. `Team.APITokens.List` and `Team.APITokens.Iterate` list the team's tokens without their values.
+
+```go
+created, err := client.Team.APITokens.Create(ctx, lettermint.StoreTeamApiTokenData{
+	Name:      "Deploy",
+	Abilities: []string{"read:domains", "write:projects"},
+	ExpiresAt: lettermint.Value("2026-12-31T23:59:59Z"),
+})
+if err != nil {
+	return err
+}
+token := created.Data.Token // the token's value, shown once: store it now
+_, err = client.Team.APITokens.Delete(ctx, created.Data.ID)
 ```
 
 `Team.Members.List` and `Team.Members.Iterate` take `FilterProjectID` to return only the members who can access a project: members with access to all projects and members selected for it. `Team.Members.Remove` removes a member from the team; the Owner cannot be removed.

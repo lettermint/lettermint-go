@@ -275,6 +275,15 @@ func operationCalls() map[operationKey]func(context.Context, *Client) error {
 			_, err := c.Team.DuplicateRole(ctx, id("roleId"), DuplicateTeamRoleData{Name: "Support copy"})
 			return err
 		},
+		opListTeamApiTokens: func(ctx context.Context, c *Client) error { _, err := c.Team.APITokens.List(ctx, nil); return err },
+		opCreateTeamApiToken: func(ctx context.Context, c *Client) error {
+			_, err := c.Team.APITokens.Create(ctx, StoreTeamApiTokenData{Name: "Deploy", Abilities: []string{"read:domains"}})
+			return err
+		},
+		opDeleteTeamApiToken: func(ctx context.Context, c *Client) error {
+			_, err := c.Team.APITokens.Delete(ctx, id("tokenId"))
+			return err
+		},
 		opDeleteTeamMember: func(ctx context.Context, c *Client) error {
 			_, err := c.Team.Members.Remove(ctx, id("userId"))
 			return err
@@ -302,18 +311,10 @@ func responseFor(key operationKey) *http.Response {
 	return jsonResponse(op.Response.Status[0], map[string]any{})
 }
 
-// pendingOperations have no SDK method yet. The Team API token methods are
-// added by the next PR in this stack, which removes this list.
-var pendingOperations = map[operationKey]bool{
-	opListTeamApiTokens:  true,
-	opCreateTeamApiToken: true,
-	opDeleteTeamApiToken: true,
-}
-
 func TestEveryOperationHasAMethod(t *testing.T) {
 	calls := operationCalls()
-	if len(operations) != 77 || len(calls)+len(pendingOperations) != len(operations) {
-		t.Fatalf("%d operations, %d calls, %d pending", len(operations), len(calls), len(pendingOperations))
+	if len(operations) != 77 || len(calls) != len(operations) {
+		t.Fatalf("%d operations, %d calls", len(operations), len(calls))
 	}
 	keys := make([]string, 0, len(operations))
 	for key := range operations {
@@ -323,12 +324,6 @@ func TestEveryOperationHasAMethod(t *testing.T) {
 	for _, k := range keys {
 		key := operationKey(k)
 		call, ok := calls[key]
-		if pendingOperations[key] {
-			if ok {
-				t.Errorf("%s has an SDK method; remove it from pendingOperations", key)
-			}
-			continue
-		}
 		if !ok {
 			t.Errorf("%s has no SDK method", key)
 			continue
@@ -1030,6 +1025,124 @@ func TestProjectAPITokensErrors(t *testing.T) {
 	}
 }
 
+func TestTeamAPITokens(t *testing.T) {
+	token := map[string]any{
+		"id":           "token/1",
+		"name":         "Deploy",
+		"abilities":    []any{"read:domains", "read:messages"},
+		"allowed_ips":  []any{"203.0.113.0/24"},
+		"created_via":  "api",
+		"expires_at":   "2026-12-31T23:59:59Z",
+		"last_used_at": nil,
+		"created_at":   "2026-10-28T09:00:00Z",
+	}
+	created := map[string]any{}
+	for key, value := range token {
+		created[key] = value
+	}
+	created["token"] = "lm_team_secret_value"
+	client, fake := newTestClient(t, func(r recorded, _ int) *http.Response {
+		switch r.Method {
+		case "GET":
+			return jsonResponse(200, map[string]any{"data": []any{token}, "next_cursor": nil})
+		case "DELETE":
+			return jsonResponse(200, map[string]any{"message": "The API token has been deleted."})
+		}
+		return jsonResponse(201, map[string]any{"data": created, "message": "The API token has been created."})
+	})
+	ctx := context.Background()
+
+	resp, err := client.Team.APITokens.Create(ctx, StoreTeamApiTokenData{Name: "Deploy", Abilities: []string{"read:domains", "read:messages"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.Data.ID != "token/1" || resp.Data.Token != "lm_team_secret_value" || resp.Message != "The API token has been created." ||
+		!reflect.DeepEqual(resp.Data.Abilities, []string{"read:domains", "read:messages"}) || !reflect.DeepEqual(resp.Data.AllowedIPs, []string{"203.0.113.0/24"}) ||
+		resp.Data.ExpiresAt == nil || *resp.Data.ExpiresAt != "2026-12-31T23:59:59Z" || resp.Data.CreatedVia == nil || *resp.Data.CreatedVia != ApiTokenSourceAPI {
+		t.Fatalf("%+v", resp)
+	}
+	if _, err := client.Team.APITokens.Create(ctx, StoreTeamApiTokenData{Name: "CI", Abilities: []string{"read:domains"}, ExpiresAt: Value("2026-11-30T00:00:00Z")}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := client.Team.APITokens.Create(ctx, StoreTeamApiTokenData{Name: "CI", Abilities: []string{}, ExpiresAt: Null[string]()}); err != nil {
+		t.Fatal(err)
+	}
+	page, err := client.Team.APITokens.List(ctx, &ListTeamApiTokensQuery{PageSize: 10, PageCursor: "abc", Sort: []ListTeamApiTokensQuerySortItem{ListTeamApiTokensQuerySortItemName}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(page.Data) != 1 || page.Data[0].Name != "Deploy" || page.Data[0].LastUsedAt != nil || page.NextCursor != nil {
+		t.Fatalf("%+v", page)
+	}
+	if _, err := client.Team.APITokens.List(ctx, nil); err != nil {
+		t.Fatal(err)
+	}
+	deleted, err := client.Team.APITokens.Delete(ctx, "token/1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if deleted.Message != "The API token has been deleted." {
+		t.Fatalf("%+v", deleted)
+	}
+
+	requests := fake.all()
+	want := []struct{ method, url, body string }{
+		{"POST", "https://api.lettermint.co/v1/team/api-tokens", `{"name":"Deploy","abilities":["read:domains","read:messages"]}`},
+		{"POST", "https://api.lettermint.co/v1/team/api-tokens", `{"name":"CI","abilities":["read:domains"],"expires_at":"2026-11-30T00:00:00Z"}`},
+		{"POST", "https://api.lettermint.co/v1/team/api-tokens", `{"name":"CI","abilities":[],"expires_at":null}`},
+		{"GET", "https://api.lettermint.co/v1/team/api-tokens?page%5Bsize%5D=10&page%5Bcursor%5D=abc&sort=name", ""},
+		{"GET", "https://api.lettermint.co/v1/team/api-tokens", ""},
+		{"DELETE", "https://api.lettermint.co/v1/team/api-tokens/token%2F1", ""},
+	}
+	if len(requests) != len(want) {
+		t.Fatal(len(requests))
+	}
+	for i, w := range want {
+		r := requests[i]
+		if r.Method != w.method || r.URL.String() != w.url || string(r.RawBody) != w.body {
+			t.Errorf("%d: %s %s %s, want %s %s %s", i, r.Method, r.URL, r.RawBody, w.method, w.url, w.body)
+		}
+		if r.Header.Get("Authorization") != "Bearer "+teamFixture || r.Header.Get("x-lettermint-token") != "" || r.Header.Get("Idempotency-Key") != "" {
+			t.Errorf("%d: %v", i, r.Header)
+		}
+	}
+
+	// An empty ID is rejected before a request.
+	_, err = client.Team.APITokens.Delete(ctx, "")
+	if !strings.Contains(mustAs[*ConfigError](t, err).Message, "Team.APITokens.Delete: tokenId must be a non-empty string") {
+		t.Fatal(err)
+	}
+	if len(fake.all()) != len(want) {
+		t.Fatal(len(fake.all()))
+	}
+
+	// Without a team token, no request is sent.
+	sendingOnly, _ := New(WithSendingToken(sendingFixture), WithHTTPClient(&http.Client{Transport: &fakeTransport{handle: func(recorded, int) *http.Response { return nil }}}))
+	_, err = sendingOnly.Team.APITokens.Create(ctx, StoreTeamApiTokenData{Name: "x", Abilities: []string{}})
+	if !strings.Contains(mustAs[*ConfigError](t, err).Message, "Team.APITokens.Create needs a team token") {
+		t.Fatal(err)
+	}
+}
+
+func TestTeamAPITokensErrors(t *testing.T) {
+	responses := []*http.Response{
+		jsonResponse(422, map[string]any{"message": "The abilities field is required.", "errors": map[string]any{"abilities": []any{"The abilities field is required."}}}),
+		jsonResponse(403, map[string]any{"error": map[string]any{"code": "forbidden", "message": "This action is unauthorized."}}),
+	}
+	client, _ := newTestClient(t, func(_ recorded, i int) *http.Response { return responses[i] })
+	ctx := context.Background()
+	_, err := client.Team.APITokens.Create(ctx, StoreTeamApiTokenData{Name: "Deploy"})
+	validation := mustAs[*ValidationError](t, err)
+	if validation.Status != 422 || len(validation.Errors["abilities"]) != 1 {
+		t.Fatalf("%+v", validation)
+	}
+	_, err = client.Team.APITokens.Delete(ctx, "token_1")
+	permission := mustAs[*PermissionError](t, err)
+	if permission.Status != 403 || permission.Message != "This action is unauthorized." {
+		t.Fatalf("%+v", permission)
+	}
+}
+
 func query(r recorded) map[string]string {
 	result := map[string]string{}
 	for key, values := range r.URL.Query() {
@@ -1145,11 +1258,12 @@ func TestEveryListIterates(t *testing.T) {
 		"project API tokens": func(c *Client) func(func(any, error) bool) {
 			return anySeq(c.Projects.APITokens.Iterate(ctx, "p", nil))
 		},
-		"routes":       func(c *Client) func(func(any, error) bool) { return anySeq(c.Routes.Iterate(ctx, "p", nil)) },
-		"suppressions": func(c *Client) func(func(any, error) bool) { return anySeq(c.Suppressions.Iterate(ctx, nil)) },
-		"team members": func(c *Client) func(func(any, error) bool) { return anySeq(c.Team.Members.Iterate(ctx, nil)) },
-		"team invites": func(c *Client) func(func(any, error) bool) { return anySeq(c.Team.Invites.Iterate(ctx, nil)) },
-		"webhooks":     func(c *Client) func(func(any, error) bool) { return anySeq(c.Webhooks.Iterate(ctx, nil)) },
+		"routes":          func(c *Client) func(func(any, error) bool) { return anySeq(c.Routes.Iterate(ctx, "p", nil)) },
+		"suppressions":    func(c *Client) func(func(any, error) bool) { return anySeq(c.Suppressions.Iterate(ctx, nil)) },
+		"team members":    func(c *Client) func(func(any, error) bool) { return anySeq(c.Team.Members.Iterate(ctx, nil)) },
+		"team invites":    func(c *Client) func(func(any, error) bool) { return anySeq(c.Team.Invites.Iterate(ctx, nil)) },
+		"team API tokens": func(c *Client) func(func(any, error) bool) { return anySeq(c.Team.APITokens.Iterate(ctx, nil)) },
+		"webhooks":        func(c *Client) func(func(any, error) bool) { return anySeq(c.Webhooks.Iterate(ctx, nil)) },
 		"webhook deliveries": func(c *Client) func(func(any, error) bool) {
 			return anySeq(c.Webhooks.Deliveries.Iterate(ctx, "w", nil))
 		},
