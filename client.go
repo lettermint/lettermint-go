@@ -185,7 +185,7 @@ func newClient(config clientConfig) (*Client, error) {
 		Emails:       &EmailsService{service{t, "EmailsService"}},
 		Domains:      &DomainsService{service{t, "DomainsService"}},
 		Messages:     &MessagesService{service{t, "MessagesService"}},
-		Projects:     &ProjectsService{service: service{t, "ProjectsService"}, ReportForwarding: &ReportForwardingService{service{t, "ReportForwardingService"}}, APITokens: &ProjectAPITokensService{service{t, "ProjectAPITokensService"}}},
+		Projects:     &ProjectsService{service: service{t, "ProjectsService"}, ReportForwarding: &ReportForwardingService{service{t, "ReportForwardingService"}}, APITokens: &ProjectAPITokensService{service{t, "ProjectAPITokensService"}}, TrackingDomain: &TrackingDomainService{service{t, "TrackingDomainService"}}},
 		Routes:       &RoutesService{service{t, "RoutesService"}},
 		Stats:        &StatsService{service{t, "StatsService"}},
 		Suppressions: &SuppressionsService{service{t, "SuppressionsService"}},
