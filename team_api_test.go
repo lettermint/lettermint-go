@@ -214,6 +214,22 @@ func operationCalls() map[operationKey]func(context.Context, *Client) error {
 			_, err := c.Webhooks.Test(ctx, id("webhookId"))
 			return err
 		},
+		opStartDomainDkimUpgrade: func(ctx context.Context, c *Client) error {
+			_, err := c.Domains.StartDkimUpgrade(ctx, id("domainId"))
+			return err
+		},
+		opCancelDomainDkimUpgrade: func(ctx context.Context, c *Client) error {
+			_, err := c.Domains.CancelDkimUpgrade(ctx, id("domainId"))
+			return err
+		},
+		opActivateDomainDkimUpgrade: func(ctx context.Context, c *Client) error {
+			_, err := c.Domains.ActivateDkimUpgrade(ctx, id("domainId"))
+			return err
+		},
+		opRotateDomainDkimKey: func(ctx context.Context, c *Client) error {
+			_, err := c.Domains.RotateDkimKey(ctx, id("domainId"))
+			return err
+		},
 		opUpdateDomainProjects: func(ctx context.Context, c *Client) error {
 			_, err := c.Domains.UpdateProjects(ctx, id("domainId"), UpdateDomainProjectsData{ProjectIDs: []string{"p"}})
 			return err
@@ -315,14 +331,9 @@ func responseFor(key operationKey) *http.Response {
 	return jsonResponse(op.Response.Status[0], map[string]any{})
 }
 
-// pendingOperations have no SDK method yet. The DKIM upgrade and rotation
-// methods and the project tracking domain methods are added by the next PRs
-// in this stack, which remove them from this list.
+// pendingOperations have no SDK method yet. The project tracking domain
+// methods are added by the next PR in this stack, which removes this list.
 var pendingOperations = map[operationKey]bool{
-	opStartDomainDkimUpgrade:      true,
-	opCancelDomainDkimUpgrade:     true,
-	opActivateDomainDkimUpgrade:   true,
-	opRotateDomainDkimKey:         true,
 	opGetProjectTrackingDomain:    true,
 	opUpdateProjectTrackingDomain: true,
 	opDeleteProjectTrackingDomain: true,
@@ -1264,6 +1275,153 @@ func TestTeamAPITokensUpdateErrors(t *testing.T) {
 	}
 	_, err = client.Team.APITokens.Update(ctx, "token_1", UpdateTeamApiTokenData{Name: Ptr("Deploy")})
 	if notFound := mustAs[*NotFoundError](t, err); notFound.Status != 404 || notFound.Code != "RESOURCE_NOT_FOUND" {
+		t.Fatalf("%+v", notFound)
+	}
+}
+
+func TestDomainsDkimTransitions(t *testing.T) {
+	transition := map[string]any{"type": "legacy_upgrade", "state": "awaiting_dns", "completes_after": nil}
+	domain := map[string]any{
+		"id":                "domain/1",
+		"domain":            "acme.test",
+		"dkim_mode":         "legacy_txt",
+		"rotation_ready":    false,
+		"dkim_transition":   transition,
+		"status_changed_at": nil,
+		"dns_records":       []any{map[string]any{"id": "record_1", "type": "CNAME", "verification_scope": "migration"}},
+		"created_at":        "2026-11-01T09:00:00Z",
+	}
+	client, fake := newTestClient(t, func(_ recorded, i int) *http.Response {
+		switch i {
+		case 0:
+			return jsonResponse(202, map[string]any{"data": domain, "message": "The DKIM upgrade has started."})
+		case 1:
+			grace := map[string]any{}
+			for key, value := range domain {
+				grace[key] = value
+			}
+			grace["dkim_transition"] = map[string]any{"type": "legacy_upgrade", "state": "grace_period", "completes_after": "2026-11-08T09:00:00Z"}
+			return jsonResponse(200, map[string]any{"data": grace, "message": "The DKIM upgrade has been activated."})
+		case 2:
+			cancelled := map[string]any{}
+			for key, value := range domain {
+				cancelled[key] = value
+			}
+			cancelled["dkim_transition"] = nil
+			return jsonResponse(200, map[string]any{"data": cancelled, "message": "The DKIM upgrade has been cancelled."})
+		}
+		managed := map[string]any{"id": "domain/1", "domain": "acme.test", "dkim_mode": "managed_cname", "rotation_ready": true, "status_changed_at": nil, "created_at": "2026-11-01T09:00:00Z"}
+		if i == 3 {
+			managed["dkim_transition"] = map[string]any{"type": "rotation", "state": "preparing", "completes_after": nil}
+		}
+		return jsonResponse(202, map[string]any{"data": managed, "message": "The DKIM key rotation has started."})
+	})
+	ctx := context.Background()
+
+	started, err := client.Domains.StartDkimUpgrade(ctx, "domain/1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if tr, ok := started.Data.DkimTransition.Get(); !ok || tr.Type != DkimTransitionTypeLegacyUpgrade || tr.State != DkimTransitionPhaseAwaitingDNS || tr.CompletesAfter != nil ||
+		started.Data.DkimMode != DkimModeLegacyTxt || len(started.Data.DNSRecords) != 1 || started.Message != "The DKIM upgrade has started." {
+		t.Fatalf("%+v", started)
+	}
+	activated, err := client.Domains.ActivateDkimUpgrade(ctx, "domain/1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if tr, ok := activated.Data.DkimTransition.Get(); !ok || tr.State != DkimTransitionPhaseGracePeriod || tr.CompletesAfter == nil || *tr.CompletesAfter != "2026-11-08T09:00:00Z" {
+		t.Fatalf("%+v", activated)
+	}
+	cancelled, err := client.Domains.CancelDkimUpgrade(ctx, "domain/1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !cancelled.Data.DkimTransition.IsNull() || cancelled.Message != "The DKIM upgrade has been cancelled." {
+		t.Fatalf("%+v", cancelled)
+	}
+	rotated, err := client.Domains.RotateDkimKey(ctx, "domain/1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if tr, ok := rotated.Data.DkimTransition.Get(); !ok || tr.Type != DkimTransitionTypeRotation || tr.State != DkimTransitionPhasePreparing || rotated.Data.DkimMode != DkimModeManagedCname {
+		t.Fatalf("%+v", rotated)
+	}
+	// A response without dkim_transition leaves it unset.
+	rotatedAgain, err := client.Domains.RotateDkimKey(ctx, "domain/1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rotatedAgain.Data.DkimTransition.IsSet() {
+		t.Fatalf("%+v", rotatedAgain.Data.DkimTransition)
+	}
+
+	requests := fake.all()
+	want := []struct{ method, url string }{
+		{"POST", "https://api.lettermint.co/v1/domains/domain%2F1/dkim/upgrade"},
+		{"POST", "https://api.lettermint.co/v1/domains/domain%2F1/dkim/upgrade/activate"},
+		{"DELETE", "https://api.lettermint.co/v1/domains/domain%2F1/dkim/upgrade"},
+		{"POST", "https://api.lettermint.co/v1/domains/domain%2F1/dkim/rotate"},
+		{"POST", "https://api.lettermint.co/v1/domains/domain%2F1/dkim/rotate"},
+	}
+	if len(requests) != len(want) {
+		t.Fatal(len(requests))
+	}
+	for i, w := range want {
+		r := requests[i]
+		if r.Method != w.method || r.URL.String() != w.url {
+			t.Errorf("%d: %s %s, want %s %s", i, r.Method, r.URL, w.method, w.url)
+		}
+		if len(r.RawBody) != 0 || r.Header.Get("Content-Type") != "" || r.Header.Get("Idempotency-Key") != "" {
+			t.Errorf("%d: %q %v", i, r.RawBody, r.Header)
+		}
+		if r.Header.Get("Authorization") != "Bearer "+teamFixture || r.Header.Get("x-lettermint-token") != "" {
+			t.Errorf("%d: %v", i, r.Header)
+		}
+	}
+
+	// An empty ID is rejected before a request.
+	for name, call := range map[string]func(context.Context, string, ...RequestOption) (*DomainMutationResponse, error){
+		"StartDkimUpgrade":    client.Domains.StartDkimUpgrade,
+		"CancelDkimUpgrade":   client.Domains.CancelDkimUpgrade,
+		"ActivateDkimUpgrade": client.Domains.ActivateDkimUpgrade,
+		"RotateDkimKey":       client.Domains.RotateDkimKey,
+	} {
+		_, err := call(ctx, "")
+		if !strings.Contains(mustAs[*ConfigError](t, err).Message, "Domains."+name+": domainId must be a non-empty string") {
+			t.Fatal(err)
+		}
+	}
+	if len(fake.all()) != len(want) {
+		t.Fatal(len(fake.all()))
+	}
+
+	// Without a team token, no request is sent.
+	sendingOnly, _ := New(WithSendingToken(sendingFixture), WithHTTPClient(&http.Client{Transport: &fakeTransport{handle: func(recorded, int) *http.Response { return nil }}}))
+	_, err = sendingOnly.Domains.RotateDkimKey(ctx, "domain_1")
+	if !strings.Contains(mustAs[*ConfigError](t, err).Message, "Domains.RotateDkimKey needs a team token") {
+		t.Fatal(err)
+	}
+}
+
+func TestDomainsDkimTransitionErrors(t *testing.T) {
+	responses := []*http.Response{
+		jsonResponse(422, map[string]any{"error": map[string]any{"code": "DKIM_UPGRADE_NOT_READY", "message": "The DKIM CNAME records are not verified yet."}}),
+		jsonResponse(422, map[string]any{"error": map[string]any{"code": "DKIM_UPGRADE_IN_GRACE_PERIOD", "message": "The upgrade can no longer be cancelled."}}),
+		jsonResponse(404, map[string]any{"error": map[string]any{"code": "RESOURCE_NOT_FOUND", "message": "Not found."}}),
+	}
+	client, _ := newTestClient(t, func(_ recorded, i int) *http.Response { return responses[i] })
+	ctx := context.Background()
+	_, err := client.Domains.ActivateDkimUpgrade(ctx, "domain_1")
+	if validation := mustAs[*ValidationError](t, err); validation.Status != 422 || validation.Code != "DKIM_UPGRADE_NOT_READY" {
+		t.Fatalf("%+v", validation)
+	}
+	_, err = client.Domains.CancelDkimUpgrade(ctx, "domain_1")
+	if validation := mustAs[*ValidationError](t, err); validation.Code != "DKIM_UPGRADE_IN_GRACE_PERIOD" {
+		t.Fatalf("%+v", validation)
+	}
+	_, err = client.Domains.StartDkimUpgrade(ctx, "domain_1")
+	if notFound := mustAs[*NotFoundError](t, err); notFound.Code != "RESOURCE_NOT_FOUND" {
 		t.Fatalf("%+v", notFound)
 	}
 }

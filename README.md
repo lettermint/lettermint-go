@@ -270,7 +270,7 @@ html, err := client.Messages.HTML(ctx, "message-id")
 
 | Field | Methods |
 | --- | --- |
-| `Domains` | `List`, `Iterate`, `Create`, `Retrieve`, `Delete`, `VerifyDNSRecords`, `VerifyDNSRecord`, `UpdateProjects` |
+| `Domains` | `List`, `Iterate`, `Create`, `Retrieve`, `Delete`, `VerifyDNSRecords`, `VerifyDNSRecord`, `UpdateProjects`, `StartDkimUpgrade`, `ActivateDkimUpgrade`, `CancelDkimUpgrade`, `RotateDkimKey` |
 | `Messages` | `List`, `Iterate`, `Retrieve`, `Events`, `IterateEvents`, `Source`, `HTML`, `Text`, `Reschedule`, `Cancel`, `Process`, `Resend` |
 | `Projects` | `List`, `Iterate`, `Create`, `Retrieve`, `Update`, `Delete`, `RotateToken` |
 | `Projects.ReportForwarding` | `Retrieve`, `Update`, `Delete`, `Verify`, `ResendCode` |
@@ -287,6 +287,26 @@ html, err := client.Messages.HTML(ctx, "message-id")
 | (client) | `Ping`, `Analytics`, `AnalyticsPages`, `BlockedFileTypes` |
 
 `Webhooks.Deliveries.Retry` sends a delivery's original payload to the webhook again now, and returns a `*ConflictError` when the delivery cannot be retried.
+
+`Domains.StartDkimUpgrade` moves a domain with a legacy DKIM TXT record (`DkimModeLegacyTxt`) to managed DKIM. The response lists two new DKIM CNAME records to add to your DNS; the TXT record keeps signing until the upgrade completes. `DkimTransition` on the domain shows the progress. When its `State` is `DkimTransitionPhaseReadyToActivate`, `Domains.ActivateDkimUpgrade` starts a grace period in which both keys are published, and the upgrade completes at `CompletesAfter`. `Domains.CancelDkimUpgrade` cancels an upgrade before its grace period. `Domains.RotateDkimKey` replaces the key of a domain with managed DKIM early; no DNS change is needed. The API returns a `*ValidationError` with a `Code` such as `DKIM_UPGRADE_NOT_READY` when the domain is not in the right state.
+
+```go
+resp, err := client.Domains.StartDkimUpgrade(ctx, "domain-id")
+if err != nil {
+	return err
+}
+for _, record := range resp.Data.DNSRecords {
+	if record.VerificationScope == lettermint.DnsVerificationScopeMigration {
+		fmt.Println(record.Type, record.Hostname, record.Content) // add these DKIM CNAME records
+	}
+}
+
+// Later, once both CNAME records are verified:
+domain, err := client.Domains.Retrieve(ctx, "domain-id", nil)
+if transition, ok := domain.DkimTransition.Get(); ok && transition.State == lettermint.DkimTransitionPhaseReadyToActivate {
+	_, err = client.Domains.ActivateDkimUpgrade(ctx, "domain-id")
+}
+```
 
 `Projects.APITokens.Create` creates a Project API token. The response holds the token's value once, in `Data.Token`: use it to send through the API, or as the SMTP password when SMTP is enabled for the project (`SMTP` then holds the host, ports and user name, otherwise it is `nil`). `ShortToken` creates a shorter token for devices that limit the password length. `Projects.APITokens.List` and `Projects.APITokens.Iterate` list the project's tokens without their values.
 
