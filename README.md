@@ -281,7 +281,7 @@ html, err := client.Messages.HTML(ctx, "message-id")
 | `Team` | `Retrieve`, `Update`, `Usage`, `Roles`, `RetrieveRole`, `CreateRole`, `UpdateRole`, `DeleteRole`, `DuplicateRole` |
 | `Team.Members` | `List`, `Iterate`, `Retrieve`, `UpdateAssignment`, `Remove` |
 | `Team.Invites` | `List`, `Iterate`, `Retrieve`, `Create`, `Update`, `Revoke` |
-| `Team.APITokens` | `List`, `Iterate`, `Create`, `Delete` |
+| `Team.APITokens` | `List`, `Iterate`, `Create`, `Update`, `Delete` |
 | `Webhooks` | `List`, `Iterate`, `Create`, `Retrieve`, `Update`, `Delete`, `Test`, `RegenerateSecret` |
 | `Webhooks.Deliveries` | `List(ctx, webhookID, …)`, `Iterate(ctx, webhookID, …)`, `Retrieve(ctx, webhookID, deliveryID)`, `Retry(ctx, webhookID, deliveryID)` |
 | (client) | `Ping`, `Analytics`, `AnalyticsPages`, `BlockedFileTypes` |
@@ -312,6 +312,15 @@ if err != nil {
 }
 token := created.Data.Token // the token's value, shown once: store it now
 _, err = client.Team.APITokens.Delete(ctx, created.Data.ID)
+```
+
+`Team.APITokens.Update` renames a token or replaces its abilities. Fields you leave out stay unchanged. `Abilities` replaces the token's complete list. The requesting token can only change tokens whose abilities it also has, and only to abilities it has. To add abilities, the changed token must be limited to the requesting token's IP allowlist and must not expire after it; otherwise the API returns a `*PermissionError`. The response does not include the token's value.
+
+```go
+updated, err := client.Team.APITokens.Update(ctx, "token-id", lettermint.UpdateTeamApiTokenData{
+	Name:      lettermint.Ptr("Deploy (production)"),
+	Abilities: []string{"read:domains"},
+})
 ```
 
 `Team.Members.List` and `Team.Members.Iterate` take `FilterProjectID` to return only the members who can access a project: members with access to all projects and members selected for it. `Team.Members.Remove` removes a member from the team; the Owner cannot be removed.

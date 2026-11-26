@@ -191,6 +191,16 @@ func (s *TeamAPITokensService) Create(ctx context.Context, body StoreTeamApiToke
 	return callJSON[TeamApiTokenCreatedResponse](ctx, s.t, opCreateTeamApiToken, callArgs{label: "Team.APITokens.Create", body: body, options: requestOptions(options)})
 }
 
+// Update renames a Team API token or replaces its abilities. Fields left
+// out stay unchanged. Abilities replaces the token's complete list. The
+// requesting token can only change tokens whose abilities it also has, and
+// only to abilities it has. To add abilities, the changed token must be
+// limited to the requesting token's IP allowlist and must not expire after
+// it. The response does not include the token's value.
+func (s *TeamAPITokensService) Update(ctx context.Context, tokenID string, body UpdateTeamApiTokenData, options ...RequestOption) (*TeamApiToken, error) {
+	return callJSON[TeamApiToken](ctx, s.t, opUpdateTeamApiToken, callArgs{label: "Team.APITokens.Update", path: []string{tokenID}, body: body, options: requestOptions(options)})
+}
+
 // Delete deletes a Team API token.
 func (s *TeamAPITokensService) Delete(ctx context.Context, tokenID string, options ...RequestOption) (*MessageResponse, error) {
 	return callJSON[MessageResponse](ctx, s.t, opDeleteTeamApiToken, callArgs{label: "Team.APITokens.Delete", path: []string{tokenID}, options: requestOptions(options)})

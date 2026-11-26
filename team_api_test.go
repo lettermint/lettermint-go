@@ -280,6 +280,10 @@ func operationCalls() map[operationKey]func(context.Context, *Client) error {
 			_, err := c.Team.APITokens.Create(ctx, StoreTeamApiTokenData{Name: "Deploy", Abilities: []string{"read:domains"}})
 			return err
 		},
+		opUpdateTeamApiToken: func(ctx context.Context, c *Client) error {
+			_, err := c.Team.APITokens.Update(ctx, id("tokenId"), UpdateTeamApiTokenData{Name: Ptr("Deploy")})
+			return err
+		},
 		opDeleteTeamApiToken: func(ctx context.Context, c *Client) error {
 			_, err := c.Team.APITokens.Delete(ctx, id("tokenId"))
 			return err
@@ -311,10 +315,24 @@ func responseFor(key operationKey) *http.Response {
 	return jsonResponse(op.Response.Status[0], map[string]any{})
 }
 
+// pendingOperations have no SDK method yet. The DKIM upgrade and rotation
+// methods and the project tracking domain methods are added by the next PRs
+// in this stack, which remove them from this list.
+var pendingOperations = map[operationKey]bool{
+	opStartDomainDkimUpgrade:      true,
+	opCancelDomainDkimUpgrade:     true,
+	opActivateDomainDkimUpgrade:   true,
+	opRotateDomainDkimKey:         true,
+	opGetProjectTrackingDomain:    true,
+	opUpdateProjectTrackingDomain: true,
+	opDeleteProjectTrackingDomain: true,
+	opVerifyProjectTrackingDomain: true,
+}
+
 func TestEveryOperationHasAMethod(t *testing.T) {
 	calls := operationCalls()
-	if len(operations) != 77 || len(calls) != len(operations) {
-		t.Fatalf("%d operations, %d calls", len(operations), len(calls))
+	if len(operations) != 86 || len(calls)+len(pendingOperations) != len(operations) {
+		t.Fatalf("%d operations, %d calls, %d pending", len(operations), len(calls), len(pendingOperations))
 	}
 	keys := make([]string, 0, len(operations))
 	for key := range operations {
@@ -324,6 +342,12 @@ func TestEveryOperationHasAMethod(t *testing.T) {
 	for _, k := range keys {
 		key := operationKey(k)
 		call, ok := calls[key]
+		if pendingOperations[key] {
+			if ok {
+				t.Errorf("%s has an SDK method; remove it from pendingOperations", key)
+			}
+			continue
+		}
 		if !ok {
 			t.Errorf("%s has no SDK method", key)
 			continue
@@ -1149,6 +1173,99 @@ func query(r recorded) map[string]string {
 		result[key] = strings.Join(values, "|")
 	}
 	return result
+}
+
+func TestTeamAPITokensUpdate(t *testing.T) {
+	token := map[string]any{
+		"id":           "token/1",
+		"name":         "Deploy (production)",
+		"abilities":    []any{"read:domains"},
+		"allowed_ips":  []any{},
+		"created_via":  "api",
+		"expires_at":   nil,
+		"last_used_at": "2026-11-20T09:00:00Z",
+		"created_at":   "2026-10-28T09:00:00Z",
+	}
+	client, fake := newTestClient(t, func(recorded, int) *http.Response { return jsonResponse(200, token) })
+	ctx := context.Background()
+
+	resp, err := client.Team.APITokens.Update(ctx, "token/1", UpdateTeamApiTokenData{Name: Ptr("Deploy (production)"), Abilities: []string{"read:domains"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.ID != "token/1" || resp.Name != "Deploy (production)" || !reflect.DeepEqual(resp.Abilities, []string{"read:domains"}) ||
+		resp.ExpiresAt != nil || resp.LastUsedAt == nil || *resp.LastUsedAt != "2026-11-20T09:00:00Z" {
+		t.Fatalf("%+v", resp)
+	}
+	if _, err := client.Team.APITokens.Update(ctx, "token/1", UpdateTeamApiTokenData{Name: Ptr("Deploy")}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := client.Team.APITokens.Update(ctx, "token/1", UpdateTeamApiTokenData{Abilities: []string{"read:domains", "write:projects"}}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := client.Team.APITokens.Update(ctx, "token/1", UpdateTeamApiTokenData{}); err != nil {
+		t.Fatal(err)
+	}
+
+	requests := fake.all()
+	want := []string{
+		`{"name":"Deploy (production)","abilities":["read:domains"]}`,
+		`{"name":"Deploy"}`,
+		`{"abilities":["read:domains","write:projects"]}`,
+		`{}`,
+	}
+	if len(requests) != len(want) {
+		t.Fatal(len(requests))
+	}
+	for i, body := range want {
+		r := requests[i]
+		if r.Method != "PUT" || r.URL.String() != "https://api.lettermint.co/v1/team/api-tokens/token%2F1" || string(r.RawBody) != body {
+			t.Errorf("%d: %s %s %s, want PUT %s", i, r.Method, r.URL, r.RawBody, body)
+		}
+		if r.Header.Get("Authorization") != "Bearer "+teamFixture || r.Header.Get("x-lettermint-token") != "" || r.Header.Get("Content-Type") != "application/json" || r.Header.Get("Idempotency-Key") != "" {
+			t.Errorf("%d: %v", i, r.Header)
+		}
+	}
+
+	// An empty ID is rejected before a request.
+	_, err = client.Team.APITokens.Update(ctx, "", UpdateTeamApiTokenData{Name: Ptr("Deploy")})
+	if !strings.Contains(mustAs[*ConfigError](t, err).Message, "Team.APITokens.Update: tokenId must be a non-empty string") {
+		t.Fatal(err)
+	}
+	if len(fake.all()) != len(want) {
+		t.Fatal(len(fake.all()))
+	}
+
+	// Without a team token, no request is sent.
+	sendingOnly, _ := New(WithSendingToken(sendingFixture), WithHTTPClient(&http.Client{Transport: &fakeTransport{handle: func(recorded, int) *http.Response { return nil }}}))
+	_, err = sendingOnly.Team.APITokens.Update(ctx, "token_1", UpdateTeamApiTokenData{Name: Ptr("Deploy")})
+	if !strings.Contains(mustAs[*ConfigError](t, err).Message, "Team.APITokens.Update needs a team token") {
+		t.Fatal(err)
+	}
+}
+
+func TestTeamAPITokensUpdateErrors(t *testing.T) {
+	responses := []*http.Response{
+		jsonResponse(422, map[string]any{"message": "The selected abilities.0 is invalid.", "errors": map[string]any{"abilities.0": []any{"The selected abilities.0 is invalid."}}}),
+		jsonResponse(403, map[string]any{"error": map[string]any{"code": "ABILITY_NOT_HELD", "message": "The token cannot grant abilities it does not have."}}),
+		jsonResponse(404, map[string]any{"error": map[string]any{"code": "RESOURCE_NOT_FOUND", "message": "Not found."}}),
+	}
+	client, _ := newTestClient(t, func(_ recorded, i int) *http.Response { return responses[i] })
+	ctx := context.Background()
+	_, err := client.Team.APITokens.Update(ctx, "token_1", UpdateTeamApiTokenData{Abilities: []string{"unknown"}})
+	validation := mustAs[*ValidationError](t, err)
+	if validation.Status != 422 || len(validation.Errors["abilities.0"]) != 1 {
+		t.Fatalf("%+v", validation)
+	}
+	_, err = client.Team.APITokens.Update(ctx, "token_1", UpdateTeamApiTokenData{Abilities: []string{"write:team"}})
+	permission := mustAs[*PermissionError](t, err)
+	if permission.Status != 403 || permission.Code != "ABILITY_NOT_HELD" {
+		t.Fatalf("%+v", permission)
+	}
+	_, err = client.Team.APITokens.Update(ctx, "token_1", UpdateTeamApiTokenData{Name: Ptr("Deploy")})
+	if notFound := mustAs[*NotFoundError](t, err); notFound.Status != 404 || notFound.Code != "RESOURCE_NOT_FOUND" {
+		t.Fatalf("%+v", notFound)
+	}
 }
 
 func TestQueryParameters(t *testing.T) {
