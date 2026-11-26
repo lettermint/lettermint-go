@@ -2,6 +2,7 @@ package lettermint
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/url"
 	"reflect"
@@ -85,6 +86,21 @@ func operationCalls() map[operationKey]func(context.Context, *Client) error {
 		},
 		opGetReportForwarding: func(ctx context.Context, c *Client) error {
 			_, err := c.Projects.ReportForwarding.Retrieve(ctx, id("projectId"))
+			return err
+		},
+		opGetProjectTrackingDomain: func(ctx context.Context, c *Client) error {
+			_, err := c.Projects.TrackingDomain.Retrieve(ctx, id("projectId"))
+			return err
+		},
+		opUpdateProjectTrackingDomain: func(ctx context.Context, c *Client) error {
+			_, err := c.Projects.TrackingDomain.Update(ctx, id("projectId"), UpdateProjectTrackingDomainData{Domain: "track.example.test"})
+			return err
+		},
+		opDeleteProjectTrackingDomain: func(ctx context.Context, c *Client) error {
+			return c.Projects.TrackingDomain.Delete(ctx, id("projectId"))
+		},
+		opVerifyProjectTrackingDomain: func(ctx context.Context, c *Client) error {
+			_, err := c.Projects.TrackingDomain.Verify(ctx, id("projectId"))
 			return err
 		},
 		opListRoutes: func(ctx context.Context, c *Client) error {
@@ -331,19 +347,10 @@ func responseFor(key operationKey) *http.Response {
 	return jsonResponse(op.Response.Status[0], map[string]any{})
 }
 
-// pendingOperations have no SDK method yet. The project tracking domain
-// methods are added by the next PR in this stack, which removes this list.
-var pendingOperations = map[operationKey]bool{
-	opGetProjectTrackingDomain:    true,
-	opUpdateProjectTrackingDomain: true,
-	opDeleteProjectTrackingDomain: true,
-	opVerifyProjectTrackingDomain: true,
-}
-
 func TestEveryOperationHasAMethod(t *testing.T) {
 	calls := operationCalls()
-	if len(operations) != 86 || len(calls)+len(pendingOperations) != len(operations) {
-		t.Fatalf("%d operations, %d calls, %d pending", len(operations), len(calls), len(pendingOperations))
+	if len(operations) != 86 || len(calls) != len(operations) {
+		t.Fatalf("%d operations, %d calls", len(operations), len(calls))
 	}
 	keys := make([]string, 0, len(operations))
 	for key := range operations {
@@ -353,12 +360,6 @@ func TestEveryOperationHasAMethod(t *testing.T) {
 	for _, k := range keys {
 		key := operationKey(k)
 		call, ok := calls[key]
-		if pendingOperations[key] {
-			if ok {
-				t.Errorf("%s has an SDK method; remove it from pendingOperations", key)
-			}
-			continue
-		}
 		if !ok {
 			t.Errorf("%s has no SDK method", key)
 			continue
@@ -1423,6 +1424,172 @@ func TestDomainsDkimTransitionErrors(t *testing.T) {
 	_, err = client.Domains.StartDkimUpgrade(ctx, "domain_1")
 	if notFound := mustAs[*NotFoundError](t, err); notFound.Code != "RESOURCE_NOT_FOUND" {
 		t.Fatalf("%+v", notFound)
+	}
+}
+
+func TestProjectTrackingDomain(t *testing.T) {
+	unverified := map[string]any{
+		"domain":               "track.acme.test",
+		"verified":             false,
+		"active":               false,
+		"verified_at":          nil,
+		"last_verification_at": nil,
+		"cname_target":         "track.lettermint.co",
+	}
+	client, fake := newTestClient(t, func(r recorded, _ int) *http.Response {
+		switch {
+		case r.Method == "GET":
+			return jsonResponse(200, unverified)
+		case r.Method == "PUT":
+			return jsonResponse(200, map[string]any{"data": unverified, "message": "The tracking domain has been saved."})
+		case r.Method == "DELETE":
+			return rawResponse(204, "")
+		}
+		return jsonResponse(200, map[string]any{
+			"data": map[string]any{
+				"domain":          "track.acme.test",
+				"verified":        true,
+				"verified_at":     "2026-11-26T09:00:00Z",
+				"expected_cname":  "track.lettermint.co",
+				"found_cname":     "track.lettermint.co",
+				"temporary_error": false,
+			},
+			"message": "The tracking domain is verified.",
+		})
+	})
+	ctx := context.Background()
+
+	current, err := client.Projects.TrackingDomain.Retrieve(ctx, "project/1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if current.Domain == nil || *current.Domain != "track.acme.test" || current.Verified || current.Active || current.VerifiedAt != nil || current.CnameTarget != "track.lettermint.co" {
+		t.Fatalf("%+v", current)
+	}
+	updated, err := client.Projects.TrackingDomain.Update(ctx, "project/1", UpdateProjectTrackingDomainData{Domain: "track.acme.test"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if updated.Message != "The tracking domain has been saved." || updated.Data.CnameTarget != "track.lettermint.co" {
+		t.Fatalf("%+v", updated)
+	}
+	verified, err := client.Projects.TrackingDomain.Verify(ctx, "project/1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !verified.Data.Verified || verified.Data.FoundCname == nil || *verified.Data.FoundCname != "track.lettermint.co" || verified.Data.TemporaryError || verified.Message != "The tracking domain is verified." {
+		t.Fatalf("%+v", verified)
+	}
+	if err := client.Projects.TrackingDomain.Delete(ctx, "project/1"); err != nil {
+		t.Fatal(err)
+	}
+
+	requests := fake.all()
+	want := []struct{ method, url, body string }{
+		{"GET", "https://api.lettermint.co/v1/projects/project%2F1/tracking-domain", ""},
+		{"PUT", "https://api.lettermint.co/v1/projects/project%2F1/tracking-domain", `{"domain":"track.acme.test"}`},
+		{"POST", "https://api.lettermint.co/v1/projects/project%2F1/tracking-domain/verify", ""},
+		{"DELETE", "https://api.lettermint.co/v1/projects/project%2F1/tracking-domain", ""},
+	}
+	if len(requests) != len(want) {
+		t.Fatal(len(requests))
+	}
+	for i, w := range want {
+		r := requests[i]
+		if r.Method != w.method || r.URL.String() != w.url || string(r.RawBody) != w.body {
+			t.Errorf("%d: %s %s %s, want %s %s %s", i, r.Method, r.URL, r.RawBody, w.method, w.url, w.body)
+		}
+		if r.Header.Get("Authorization") != "Bearer "+teamFixture || r.Header.Get("x-lettermint-token") != "" || r.Header.Get("Idempotency-Key") != "" {
+			t.Errorf("%d: %v", i, r.Header)
+		}
+		if (w.body != "") != (r.Header.Get("Content-Type") == "application/json") {
+			t.Errorf("%d: Content-Type %q", i, r.Header.Get("Content-Type"))
+		}
+	}
+
+	// An empty ID is rejected before a request.
+	_, err = client.Projects.TrackingDomain.Verify(ctx, "")
+	if !strings.Contains(mustAs[*ConfigError](t, err).Message, "Projects.TrackingDomain.Verify: projectId must be a non-empty string") {
+		t.Fatal(err)
+	}
+	err = client.Projects.TrackingDomain.Delete(ctx, "")
+	if !strings.Contains(mustAs[*ConfigError](t, err).Message, "Projects.TrackingDomain.Delete: projectId must be a non-empty string") {
+		t.Fatal(err)
+	}
+	if len(fake.all()) != len(want) {
+		t.Fatal(len(fake.all()))
+	}
+
+	// Without a team token, no request is sent.
+	sendingOnly, _ := New(WithSendingToken(sendingFixture), WithHTTPClient(&http.Client{Transport: &fakeTransport{handle: func(recorded, int) *http.Response { return nil }}}))
+	_, err = sendingOnly.Projects.TrackingDomain.Retrieve(ctx, "project_1")
+	if !strings.Contains(mustAs[*ConfigError](t, err).Message, "Projects.TrackingDomain.Retrieve needs a team token") {
+		t.Fatal(err)
+	}
+}
+
+func TestProjectTrackingDomainVerifyFailure(t *testing.T) {
+	responses := []*http.Response{
+		jsonResponse(422, map[string]any{
+			"data": map[string]any{
+				"domain":          "track.acme.test",
+				"verified":        false,
+				"verified_at":     nil,
+				"expected_cname":  "track.lettermint.co",
+				"found_cname":     "elsewhere.example.test",
+				"temporary_error": false,
+			},
+			"message": "The CNAME record of track.acme.test points to elsewhere.example.test.",
+		}),
+		jsonResponse(422, map[string]any{"message": "The domain field is required.", "errors": map[string]any{"domain": []any{"The domain field is required."}}}),
+		jsonResponse(403, map[string]any{"error": map[string]any{"code": "forbidden", "message": "Your plan does not include custom tracking domains."}}),
+	}
+	client, _ := newTestClient(t, func(_ recorded, i int) *http.Response { return responses[i] })
+	ctx := context.Background()
+
+	_, err := client.Projects.TrackingDomain.Verify(ctx, "project_1")
+	validation := mustAs[*ValidationError](t, err)
+	if validation.Status != 422 || validation.Message != "The CNAME record of track.acme.test points to elsewhere.example.test." {
+		t.Fatalf("%+v", validation)
+	}
+	var failure ProjectTrackingDomainVerificationResponse
+	if err := json.Unmarshal(validation.Body, &failure); err != nil {
+		t.Fatal(err)
+	}
+	if failure.Data.Verified || failure.Data.FoundCname == nil || *failure.Data.FoundCname != "elsewhere.example.test" || failure.Data.ExpectedCname != "track.lettermint.co" {
+		t.Fatalf("%+v", failure)
+	}
+
+	_, err = client.Projects.TrackingDomain.Update(ctx, "project_1", UpdateProjectTrackingDomainData{})
+	if validation := mustAs[*ValidationError](t, err); len(validation.Errors["domain"]) != 1 {
+		t.Fatalf("%+v", validation)
+	}
+	_, err = client.Projects.TrackingDomain.Update(ctx, "project_1", UpdateProjectTrackingDomainData{Domain: "track.acme.test"})
+	if permission := mustAs[*PermissionError](t, err); permission.Status != 403 {
+		t.Fatalf("%+v", permission)
+	}
+}
+
+func TestProjectTrackingDomainOnProject(t *testing.T) {
+	bodies := []map[string]any{
+		{"id": "p1", "tracking_domain": map[string]any{"domain": nil, "verified": false, "active": false, "verified_at": nil, "last_verification_at": nil, "cname_target": "track.lettermint.co"}},
+		{"id": "p2"},
+	}
+	client, _ := newTestClient(t, func(_ recorded, i int) *http.Response { return jsonResponse(200, bodies[i]) })
+	ctx := context.Background()
+	withDomain, err := client.Projects.Retrieve(ctx, "p1", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if withDomain.TrackingDomain == nil || withDomain.TrackingDomain.Domain != nil || withDomain.TrackingDomain.CnameTarget != "track.lettermint.co" {
+		t.Fatalf("%+v", withDomain.TrackingDomain)
+	}
+	without, err := client.Projects.Retrieve(ctx, "p2", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if without.TrackingDomain != nil {
+		t.Fatalf("%+v", without.TrackingDomain)
 	}
 }
 

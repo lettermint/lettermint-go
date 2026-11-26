@@ -206,6 +206,7 @@ func TestTokensNeverShow(t *testing.T) {
 		"projects":           client.Projects,
 		"report forwarding":  client.Projects.ReportForwarding,
 		"project API tokens": client.Projects.APITokens,
+		"tracking domain":    client.Projects.TrackingDomain,
 		"routes":             client.Routes,
 		"stats":              client.Stats,
 		"suppressions":       client.Suppressions,

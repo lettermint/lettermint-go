@@ -275,6 +275,7 @@ html, err := client.Messages.HTML(ctx, "message-id")
 | `Projects` | `List`, `Iterate`, `Create`, `Retrieve`, `Update`, `Delete`, `RotateToken` |
 | `Projects.ReportForwarding` | `Retrieve`, `Update`, `Delete`, `Verify`, `ResendCode` |
 | `Projects.APITokens` | `List(ctx, projectID, …)`, `Iterate(ctx, projectID, …)`, `Create(ctx, projectID, …)`, `Delete(ctx, projectID, tokenID)` |
+| `Projects.TrackingDomain` | `Retrieve`, `Update`, `Delete`, `Verify` |
 | `Routes` | `List(ctx, projectID, …)`, `Iterate(ctx, projectID, …)`, `Create(ctx, projectID, …)`, `Retrieve`, `Update`, `Delete`, `VerifyInboundDomain` |
 | `Stats` | `Retrieve` |
 | `Suppressions` | `List`, `Iterate`, `Create`, `Delete` |
@@ -305,6 +306,25 @@ for _, record := range resp.Data.DNSRecords {
 domain, err := client.Domains.Retrieve(ctx, "domain-id", nil)
 if transition, ok := domain.DkimTransition.Get(); ok && transition.State == lettermint.DkimTransitionPhaseReadyToActivate {
 	_, err = client.Domains.ActivateDkimUpgrade(ctx, "domain-id")
+}
+```
+
+`Projects.TrackingDomain` manages the custom domain that a project's open and click tracking links use. `Update` sets the domain; add a CNAME record for it that points to `CnameTarget`. Tracking links keep using the Lettermint tracking domain until the record is verified, which Lettermint checks in the background. `Verify` checks it now and returns a `*ValidationError` when the record is missing, points elsewhere or the DNS lookup failed; its `Body` then holds a `ProjectTrackingDomainVerificationResponse`. `Delete` goes back to the Lettermint tracking domain. Custom tracking domains need a plan that includes them.
+
+```go
+resp, err := client.Projects.TrackingDomain.Update(ctx, "project-id", lettermint.UpdateProjectTrackingDomainData{Domain: "track.acme.com"})
+if err != nil {
+	return err
+}
+fmt.Println("Add a CNAME record for track.acme.com that points to", resp.Data.CnameTarget)
+
+_, err = client.Projects.TrackingDomain.Verify(ctx, "project-id")
+var validation *lettermint.ValidationError
+if errors.As(err, &validation) {
+	var result lettermint.ProjectTrackingDomainVerificationResponse
+	if json.Unmarshal(validation.Body, &result) == nil {
+		fmt.Println(result.Message, result.Data.FoundCname, result.Data.TemporaryError)
+	}
 }
 ```
 

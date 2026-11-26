@@ -12,6 +12,8 @@ type ProjectsService struct {
 	ReportForwarding *ReportForwardingService
 	// APITokens manages the Project API tokens of a project.
 	APITokens *ProjectAPITokensService
+	// TrackingDomain manages the custom tracking domain of a project.
+	TrackingDomain *TrackingDomainService
 }
 
 // List returns one page of projects. Pass nil for no query parameters.
@@ -107,4 +109,41 @@ func (s *ProjectAPITokensService) Create(ctx context.Context, projectID string, 
 // Delete deletes a Project API token.
 func (s *ProjectAPITokensService) Delete(ctx context.Context, projectID, tokenID string, options ...RequestOption) (*MessageResponse, error) {
 	return callJSON[MessageResponse](ctx, s.t, opDeleteProjectApiToken, callArgs{label: "Projects.APITokens.Delete", path: []string{projectID, tokenID}, options: requestOptions(options)})
+}
+
+// TrackingDomainService manages the custom tracking domain of a project: the
+// domain that open and click tracking links use instead of the Lettermint
+// tracking domain. Needs a team token.
+type TrackingDomainService struct{ service }
+
+// Retrieve returns the custom tracking domain of a project and whether its
+// CNAME record is verified. Domain is nil when the project uses the
+// Lettermint tracking domain.
+func (s *TrackingDomainService) Retrieve(ctx context.Context, projectID string, options ...RequestOption) (*ProjectTrackingDomain, error) {
+	return callJSON[ProjectTrackingDomain](ctx, s.t, opGetProjectTrackingDomain, callArgs{label: "Projects.TrackingDomain.Retrieve", path: []string{projectID}, options: requestOptions(options)})
+}
+
+// Update sets or replaces the custom tracking domain of a project. Add a
+// CNAME record for the domain that points to Data.CnameTarget. Lettermint
+// checks the record in the background, or call Verify to check it now.
+// Tracking links keep using the Lettermint tracking domain until the domain is
+// verified. Needs a plan with custom tracking domains.
+func (s *TrackingDomainService) Update(ctx context.Context, projectID string, body UpdateProjectTrackingDomainData, options ...RequestOption) (*ProjectTrackingDomainMutationResponse, error) {
+	return callJSON[ProjectTrackingDomainMutationResponse](ctx, s.t, opUpdateProjectTrackingDomain, callArgs{label: "Projects.TrackingDomain.Update", path: []string{projectID}, body: body, options: requestOptions(options)})
+}
+
+// Delete removes the custom tracking domain (HTTP 204). Tracking links use the
+// Lettermint tracking domain again.
+func (s *TrackingDomainService) Delete(ctx context.Context, projectID string, options ...RequestOption) error {
+	return callEmpty(ctx, s.t, opDeleteProjectTrackingDomain, callArgs{label: "Projects.TrackingDomain.Delete", path: []string{projectID}, options: requestOptions(options)})
+}
+
+// Verify checks the CNAME record of the custom tracking domain now. When the
+// record is missing, points to another target or the DNS lookup failed, the
+// API answers 422 and Verify returns a *ValidationError. Its Body then holds
+// a ProjectTrackingDomainVerificationResponse (Data.TemporaryError is true
+// when the lookup failed; try again later). The API also answers 422 when the
+// project has no custom tracking domain.
+func (s *TrackingDomainService) Verify(ctx context.Context, projectID string, options ...RequestOption) (*ProjectTrackingDomainVerificationResponse, error) {
+	return callJSON[ProjectTrackingDomainVerificationResponse](ctx, s.t, opVerifyProjectTrackingDomain, callArgs{label: "Projects.TrackingDomain.Verify", path: []string{projectID}, options: requestOptions(options)})
 }
